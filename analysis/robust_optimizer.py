@@ -2,11 +2,20 @@
 # robust_optimizer.py
 from __future__ import annotations
 
+
+import os
+import sys
+
+BASE = os.path.dirname(os.path.abspath(__file__))
+ROOT = os.path.dirname(BASE)
+
+if ROOT not in sys.path:
+    sys.path.insert(0, ROOT)
+
 import argparse
 import calendar
 import csv
 import json
-import os
 import pickle
 import multiprocessing as mp
 from dataclasses import dataclass
