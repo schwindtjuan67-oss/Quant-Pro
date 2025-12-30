@@ -1,0 +1,66 @@
+{
+  "symbol": "SOLUSDT",
+  "symbols": ["SOLUSDT"],
+  "interval": "1m",
+
+  "max_loss": 0.03,
+  "max_dd": 0.04,
+  "max_trades": 12,
+
+  "corr_window": 100,
+  "corr_min_samples": 5,
+  "corr_min_symbols": 2,
+
+  "allocator_total_risk": 10.0,
+  "allocator_base_risk": 5.0,
+  "allocator_max_positions": 1,
+  "allocator_corr_threshold": 0.85,
+  "allocator_hard_block": 0.98,
+  "allocator_min_vol_target": 0.0,
+  "allocator_max_vol_target": 1.0,
+  "allocator_apply_risk_mult_to_budget": true,
+
+  "autotuning": {
+    "enabled": true,
+    "logs_dir": "logs",
+    "interval_sec": 1800,
+    "min_trades": 12,
+    "top_k": 20,
+    "symbol": "SOLUSDT"
+  },
+
+  "selector": {
+    "enabled": true,
+    "top_k_path": "logs/top_k.json",
+    "min_trades": 12,
+    "max_dd_limit": 0.30,
+    "cooldown_sec": 1800,
+
+    "hotswap_enabled": true,
+    "hotswap_interval_sec": 60,
+    "hotswap_only_uppercase": true,
+    "verbose": true,
+    "debug_hotswap": true,
+
+    "eval_trades": 8,
+    "rollback_min_mean_r": -0.05,
+    "rollback_worse_than_prev": true
+  },
+
+  "guards": {
+    "trading_enabled": true,
+    "panic_stop": true
+  },
+
+  "hour_filter": {
+    "enabled": true,
+    "timezone": "America/Argentina/Buenos_Aires",
+    "mode": "kill",
+    "killed_hours": [4, 9, 10, 12, 18, 21],
+    "apply_to": {
+      "TREND": true,
+      "RANGE": false,
+      "NOISE": false
+    }
+  }
+}

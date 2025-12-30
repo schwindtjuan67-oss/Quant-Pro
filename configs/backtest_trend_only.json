@@ -1,0 +1,51 @@
+{
+  "symbol": "SOLUSDT",
+  "symbols": ["SOLUSDT"],
+  "interval": "1m",
+
+  "max_loss": 0.03,
+  "max_dd": 0.04,
+  "max_trades": 100000,
+
+  "autotuning": {
+    "enabled": false
+  },
+
+  "selector": {
+    "enabled": false,
+    "hotswap_enabled": false,
+    "verbose": false,
+    "debug_hotswap": false
+  },
+
+  "guards": {
+    "trading_enabled": true,
+    "panic_stop": false
+  },
+
+  "hour_filter": {
+    "enabled": false
+  },
+
+  "modules": {
+    "enable_trend": true,
+    "enable_range": false,
+    "enable_delta": false
+  },
+
+  "logging": {
+    "hybrid_verbose": false,
+    "trade_logs": true
+  },
+
+  "strategy_params": {
+  "EMA_FAST": 20,
+  "EMA_SLOW": 50,
+  "MIN_SCORE_LONG": 1,
+  "MIN_SCORE_SHORT": 1
+}
+}
+
+  
+  
+

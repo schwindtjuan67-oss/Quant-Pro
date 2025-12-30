@@ -1,0 +1,18 @@
+pwsh -ExecutionPolicy Bypass -File bat/run_pipeline_parallel.ps1 -MaxJobs 6
+
+
+dsp para mergear los distintos pipelines paralel: python analysis/merge_pipeline_trades.py --run-id 2025-12-25_10-11-00
+
+
+
+Supuestamente es así:
+
+1: Ejecutar el pipeline parallelizer: 
+powershell -NoProfile -ExecutionPolicy Bypass -File .\run_pipeline_parallel.ps1
+
+
+2: Merge de CVSs (al terminar)
+python -u analysis\merge_pipeline_trades.py --run-id <RUN_ID_QUE_IMPRIMIÓ>
+
+3: Análisis del pipeline:
+python -u analysis\analyze_pipeline.py

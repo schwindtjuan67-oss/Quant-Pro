@@ -1,0 +1,28 @@
+{
+    "EMA_FAST": 9,
+    "EMA_SLOW": 21,
+    "ATR_N": 14,
+
+    "ATR_STOP_MULT": 1.5,
+    "RR_TAKE_PROFIT": 2.0,
+    "VOL_TARGET": 0.02,
+
+    "TREND_FAST": 20,
+    "TREND_SLOW": 80,
+    "VWAP_WINDOW": 96,
+    "VWAP_BAND_MULT": 2.0,
+
+    "USE_TREND_FILTER": true,
+    "USE_VWAP_FILTER": true,
+    "USE_DELTA_FILTER": true,
+
+    "RISK_MAX_DAILY_LOSS_PCT": 0.03,
+    "RISK_MAX_DD_PCT": 0.04,
+    "RISK_MAX_TRADES_PER_DAY": 12,
+    "RISK_TIMEZONE_OFFSET_HOURS": -3,
+
+    "INITIAL_BALANCE": 1000,
+    "COMMISSION": 0.00055,
+    "TRADE_LOG_PATH": "SOLUSDT_shadow_trades.csv",
+    "EQUITY_LOG_PATH": "SOLUSDT_shadow_equity.csv"
+}

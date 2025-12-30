@@ -1,0 +1,33 @@
+{
+  "ts": 1734300000,
+  "status": "RUNNING",
+  "symbols": {
+    "SOLUSDT": {
+      "regime": "TREND",
+      "price": 152.34,
+      "position": {
+        "side": "LONG",
+        "qty": 0.42,
+        "entry_price": 150.10,
+        "sl": 147.80,
+        "tp": 155.20,
+        "unrealized_r": 0.37
+      },
+      "risk": {
+        "risk_mult": 0.85,
+        "daily_dd": -0.012,
+        "trades_today": 5
+      },
+      "config": {
+        "params_key": "EMA9_ATR1.5_VT0.02",
+        "regime": "TREND",
+        "source": "selector"
+      },
+      "last_event": {
+        "type": "ENTRY",
+        "reason": "TREND_SIGNAL",
+        "ts": 1734299981
+      }
+    }
+  }
+}

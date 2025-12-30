@@ -1,0 +1,7 @@
+{
+  "min_score_long": [2, 3],
+  "min_score_short": [2, 3],
+  "VWAP_WINDOW": [48, 96],
+  "VWAP_BAND_MULT": [1.5, 2.0],
+  "META_CONTROL_ENABLED": [true, false]
+}

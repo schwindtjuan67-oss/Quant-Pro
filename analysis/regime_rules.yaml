@@ -1,0 +1,32 @@
+timezone: "America/Argentina/Buenos_Aires"
+default_timeframe: "5m"
+
+rolling:
+  window_trades: 50
+
+# ✅ FASE 6 — Memory Decay
+decay:
+  enabled: true
+  half_life_hours: 72        # 3 días: edge viejo se “olvida” rápido (scalper)
+  min_eff_trades: 10         # masa efectiva mínima para decidir
+
+kill_promote:
+  TREND:
+    min_trades: 20
+    promote:
+      expectancy_r_min: 0.06
+      profit_factor_min: 1.25
+      max_dd_r_min: -1.80
+    kill:
+      expectancy_r_max: -0.03
+      max_dd_r_max: -2.50
+
+  RANGE:
+    min_trades: 15
+    promote:
+      expectancy_r_min: 0.05
+      profit_factor_min: 1.20
+      max_dd_r_min: -1.60
+    kill:
+      expectancy_r_max: -0.03
+      max_dd_r_max: -2.00

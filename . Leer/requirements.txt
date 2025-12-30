@@ -1,0 +1,15 @@
+python-dotenv
+numpy
+websocket-client
+requests
+python-binance
+fastapi
+uvicorn
+pandas
+numpy
+websockets
+aiohttp
+uvicorn[standard] fastapi
+streamlit
+plotly streamlit pandas numpy
+pyyaml

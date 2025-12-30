@@ -1,0 +1,37 @@
+class RiskManager:
+
+    def __init__(self, max_loss_pct, max_dd_pct, max_trades, starting_equity):
+        self.max_loss_pct = max_loss_pct
+        self.max_dd_pct = max_dd_pct
+        self.max_trades = max_trades
+
+        self.starting_equity = starting_equity
+        self.equity = starting_equity
+
+        self.trades_today = 0
+        self.max_equity = starting_equity
+
+        self.conservative_mode = False
+
+    # -----------------------------------------------------------------
+    def update_equity(self, new_equity):
+        self.equity = new_equity
+        self.max_equity = max(self.max_equity, new_equity)
+
+    # -----------------------------------------------------------------
+    def can_trade(self, score):
+        # Hard stop por DD
+        dd = (self.max_equity - self.equity) / self.max_equity
+        if dd >= self.max_dd_pct:
+            return False
+
+        # Soft limit de trades
+        if self.trades_today >= self.max_trades:
+            self.conservative_mode = True
+            return score >= 5  # solo señales fuertes
+
+        return True
+
+    # -----------------------------------------------------------------
+    def register_trade(self):
+        self.trades_today += 1

@@ -1,0 +1,35 @@
+{
+  "symbol": "SOLUSDT",
+
+  "max_loss": 0.03,
+  "max_dd": 0.04,
+  "max_trades": 12,
+
+  "allocator_total_risk": 10.0,
+  "allocator_base_risk": 5.0,
+
+  "selector": {
+    "enabled": true,
+    "top_k_path": "logs/top_k.json",
+    "min_trades": 12,
+    "cooldown_sec": 1800
+  },
+
+  "runtime_state": {
+    "enabled": true,
+    "path": "logs/runtime_state_shadow.json",
+    "interval_sec": 1.0
+  },
+
+  "hour_filter": {
+    "enabled": true,
+    "timezone": "America/Argentina/Buenos_Aires",
+    "mode": "kill",
+    "killed_hours": [],
+    "apply_to": {
+      "TREND": true,
+      "RANGE": false,
+      "NOISE": false
+    }
+  }
+}

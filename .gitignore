@@ -1,0 +1,32 @@
+# .gitignore para el repo
+# Mantener la carpeta `logs/` en el repositorio (NO está en esta lista)
+
+# Entorno y secretos
+.csv
+.env
+.env.*
+.venv/
+venv/
+env/
+
+# Python bytecode / caches
+__pycache__/
+*.py[cod]
+*$py.class
+
+# IDE / editor
+.vscode/
+.idea/
+
+# OS archivos
+.DS_Store
+Thumbs.db
+
+# Testing / tooling caches
+.pytest_cache/
+.mypy_cache/
+
+# Bases de datos locales
+*.sqlite3
+
+# Nota: no se ignoran `logs/`, ni `*.csv`, ni `state_*.json` para conservar históricos importantes.

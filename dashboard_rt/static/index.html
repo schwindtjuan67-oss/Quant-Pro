@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Shadow RT Dashboard</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <div class="container">
+    <h1>Shadow RT Dashboard</h1>
+
+    <div class="selector">
+      <label><input type="radio" name="metric" value="equity_r" checked> Equity (R)</label>
+      <label><input type="radio" name="metric" value="unrealized_pnl"> Unrealized PnL</label>
+      <label><input type="radio" name="metric" value="dd_day"> DD del día</label>
+    </div>
+
+    <div id="cards"></div>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

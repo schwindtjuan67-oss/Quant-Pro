@@ -1,0 +1,33 @@
+{
+  "symbol": "SOLUSDT",
+
+  "active_config": {
+    "id": "SOLUSDT:TREND:1700000000",
+    "regime": "TREND",
+    "params": {
+      "EMA_FAST": 12,
+      "EMA_SLOW": 55,
+      "ATR_STOP_MULT": 1.6,
+      "RR_TAKE_PROFIT": 2.2
+    },
+    "applied_at_ts": 1700000000,
+    "reason": "selector_apply | pending_apply | rollback"
+  },
+
+  "pending_config": null,
+
+  "allocator_meta": {
+    "allow": true,
+    "vol_target_override": 0.35,
+    "corr_block": false,
+    "risk_mult": 0.9
+  },
+
+  "selector_meta": {
+    "source": "logs/top_k.json",
+    "rank_score": 1.87,
+    "n_trades": 142,
+    "max_dd_r": 3.1,
+    "cooldown_sec": 1800
+  }
+}

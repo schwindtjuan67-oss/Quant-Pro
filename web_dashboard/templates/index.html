@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Shadow Dashboard</title>
+    <style>
+        body { font-family: Arial; background: #111; color: #eee; padding: 40px; }
+        .box { padding: 20px; background: #222; border-radius: 8px; }
+    </style>
+</head>
+
+<body>
+    <h1>Shadow Runner Dashboard</h1>
+    <div class="box">
+        <pre id="stateBox">Loading...</pre>
+    </div>
+
+    <script>
+        async function update() {
+            const res = await fetch("/state");
+            const data = await res.json();
+            document.getElementById("stateBox").innerText = JSON.stringify(data, null, 2);
+        }
+        update();
+        setInterval(update, 2000);
+    </script>
+</body>
+</html>
