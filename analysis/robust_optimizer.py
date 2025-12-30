@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import numpy as np
-from concurrent.futures import ProcessPoolExecutor, as_completed
+from concurrent.futures import ProcessPoolExecutor, as_completed, TimeoutError as FuturesTimeoutError  # ✅ FIX: timeout correcto
 
 # Reutilizamos helpers existentes (pero NO dependemos exclusivamente del iterador)
 from backtest.run_backtest import _date_range_to_ms, _iter_candles_from_csvs, _list_csv_files
@@ -522,33 +522,6 @@ def _worker_backtest_fn(data_slice: Any, params: Dict[str, Any]) -> List[Dict[st
 # ✅ NUEVO: eval usando slices cache (misma lógica, menos overhead)
 # ============================================================
 
-def _worker_eval_batch(params_batch: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    out = []
-    for p in params_batch:
-        try:
-            out.append(_worker_eval_one(p))
-        except MemoryError:
-            out.append({
-                "params": p,
-                "passed": False,
-                "fail_reason": "OOM",
-                "agg": {},
-                "robust_score": -1e9,
-                "folds": [],
-            })
-        except Exception as e:
-            out.append({
-                "params": p,
-                "passed": False,
-                "fail_reason": f"EXCEPTION:{type(e).__name__}",
-                "agg": {},
-                "robust_score": -1e9,
-                "folds": [],
-            })
-    return out
-
-
-
 def _evaluate_params_on_cached_test_slices(
     params: Dict[str, Any],
 ) -> Dict[str, Any]:
@@ -651,6 +624,38 @@ def _worker_eval_one(params: Dict[str, Any]) -> Dict[str, Any]:
 
 
 # ============================================================
+# ✅ FIX: dejar UNA sola definición de _worker_eval_batch
+#    - usa cache (cuando existe)
+#    - mantiene OOM/EXCEPTION por param (no revienta todo el batch)
+# ============================================================
+
+def _worker_eval_batch(params_batch: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    out: List[Dict[str, Any]] = []
+    for p in params_batch:
+        try:
+            out.append(_evaluate_params_on_cached_test_slices(p))
+        except MemoryError:
+            out.append({
+                "params": p,
+                "passed": False,
+                "fail_reason": "OOM",
+                "agg": {},
+                "robust_score": -1e9,
+                "folds": [],
+            })
+        except Exception as e:
+            out.append({
+                "params": p,
+                "passed": False,
+                "fail_reason": f"EXCEPTION:{type(e).__name__}",
+                "agg": {},
+                "robust_score": -1e9,
+                "folds": [],
+            })
+    return out
+
+
+# ============================================================
 # Search loop (secuencial + paralelo sin perder features)
 # ============================================================
 
@@ -729,10 +734,6 @@ def run_robust_search(
         return results[:top_k]
 
     # ---------- paralelo: usamos workers global-init (NO pierde features) ----------
-    # Importante: el backtest_fn pasado podría ser closure no-pickleable.
-    # Para no romper, el modo paralelo NO usa ese callable directamente:
-    # se apoya en _real_backtest_fn con base_cfg/symbol/interval/warmup en init del worker.
-    # Si querés forzar uso del callable externo: desactivá paralelo.
     use_dummy = bool(os.getenv("ROBUST_USE_DUMMY", "0").strip() in ("1", "true", "TRUE", "yes", "YES", "on", "ON"))
 
     base_cfg = None
@@ -743,7 +744,6 @@ def run_robust_search(
     # --- safety defaults ---
     param_timeout = float(os.getenv("ROBUST_PARAM_TIMEOUT", "0"))  # 0 = sin timeout
     batch_size = int(os.getenv("ROBUST_BATCH_SIZE", "1"))          # 1 = modo actual
-
 
     # ✅ NUEVO: batch size via env (si no está, 1 => comportamiento idéntico al anterior)
     batch_env = os.getenv("ROBUST_BATCH_SIZE", "").strip()
@@ -761,8 +761,6 @@ def run_robust_search(
 
     progress_every = int(os.getenv("ROBUST_PROGRESS_EVERY", "25") or "25")
 
-    # NOTA: acá NO sabemos base_cfg/symbol/interval/warmup: lo setea el main usando la función paralela dedicada.
-    # Aun así, seguimos: el worker necesitará base_cfg seteado por main.
     with ProcessPoolExecutor(
         max_workers=workers,
         mp_context=ctx,
@@ -778,58 +776,88 @@ def run_robust_search(
             use_dummy,
         ),
     ) as ex:
-        # ✅ NUEVO: submit por batches
+        # ============================================================
+        # ✅ FIX #2 + #3: flujo único (sin duplicar submit) y acumulación robusta
+        # ============================================================
+
+        fut_to_batch: Dict[Any, List[Dict[str, Any]]] = {}
+
         if batch_size == 1:
             futs = [ex.submit(_evaluate_params_on_cached_test_slices, p) for p in params_list]
-            done = 0
-            for fut in as_completed(futs):
-                done += 1
-                try:
-                    if param_timeout > 0:
-                        res = fut.result(timeout=param_timeout)
-                    else:
-                        res = fut.result()
-                except TimeoutError:
-                    res = { 
+        else:
+            batches: List[List[Dict[str, Any]]] = []
+            for i in range(0, len(params_list), batch_size):
+                batches.append(params_list[i:i + batch_size])
+            futs = [ex.submit(_worker_eval_batch, b) for b in batches]
+            fut_to_batch = {fut: b for fut, b in zip(futs, batches)}
+
+        done_params = 0
+        total_params = len(params_list)
+
+        for fut in as_completed(futs):
+            try:
+                res = fut.result(timeout=param_timeout) if param_timeout > 0 else fut.result()
+
+                # res puede ser Dict (batch_size==1) o List[Dict] (batch_size>1)
+                if isinstance(res, list):
+                    results_payloads.extend(res)
+                    done_params += len(res)
+                else:
+                    results_payloads.append(res)
+                    done_params += 1
+
+            except FuturesTimeoutError:
+                # Timeout: si era batch, marcamos todos los params del batch
+                if fut in fut_to_batch:
+                    b = fut_to_batch[fut]
+                    for p in b:
+                        results_payloads.append({
+                            "params": p,
+                            "passed": False,
+                            "fail_reason": "TIMEOUT",
+                            "agg": {},
+                            "robust_score": -1e9,
+                            "folds": [],
+                        })
+                    done_params += len(b)
+                else:
+                    results_payloads.append({
                         "params": {},
                         "passed": False,
                         "fail_reason": "TIMEOUT",
                         "agg": {},
                         "robust_score": -1e9,
                         "folds": [],
-                    }
-                except Exception as e:
-                    res = {
+                    })
+                    done_params += 1
+
+            except Exception as e:
+                # Exception: si era batch, marcamos todos los params del batch
+                if fut in fut_to_batch:
+                    b = fut_to_batch[fut]
+                    for p in b:
+                        results_payloads.append({
+                            "params": p,
+                            "passed": False,
+                            "fail_reason": f"EXCEPTION:{type(e).__name__}",
+                            "agg": {},
+                            "robust_score": -1e9,
+                            "folds": [],
+                        })
+                    done_params += len(b)
+                else:
+                    results_payloads.append({
                         "params": {},
                         "passed": False,
-                        "fail_reason": f"EXCEPTION: {type(e).__name__}",
+                        "fail_reason": f"EXCEPTION:{type(e).__name__}",
                         "agg": {},
                         "robust_score": -1e9,
                         "folds": [],
-                    }
+                    })
+                    done_params += 1
 
-                results_payloads.append(res)
-
-                if progress_every > 0 and (done % progress_every == 0):
-                    print(f"[ROBUST][PAR] done {done}/{len(params_list)}")
-
-            batches: List[List[Dict[str, Any]]] = []
-
-
-            for i in range(0, len(params_list), batch_size):
-                batches.append(params_list[i:i + batch_size])
-
-            futs = [ex.submit(_worker_eval_batch, b) for b in batches]
-            done_params = 0
-            total_params = len(params_list)
-            for fut in as_completed(futs):
-                batch_payloads = fut.result()
-                # batch_payloads es List[Dict]
-                for pl in batch_payloads:
-                    results_payloads.append(pl)
-                done_params += len(batch_payloads)
-                if progress_every > 0 and (done_params % progress_every == 0):
-                    print(f"[ROBUST][PAR] done {done_params}/{total_params} (batch_size={batch_size})")
+            if progress_every > 0 and (done_params % progress_every == 0):
+                print(f"[ROBUST][PAR] done {done_params}/{total_params} (batch_size={batch_size})")
 
     # Convertir payloads -> EvalResult (misma API)
     results: List[EvalResult] = []
@@ -1144,6 +1172,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
