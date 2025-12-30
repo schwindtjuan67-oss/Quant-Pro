@@ -17,7 +17,7 @@ set ROBUST_SCRIPT=analysis\robust_optimizer.py
 set POST_SCRIPT=analysis\analysis_post_robust.py
 
 REM --- Data / Config ---
-set DATA=datasets\SOLUSDT_1m
+set DATA=datasets\SOLUSDT\1m
 set BASE_CFG=configs\base_live.json
 
 REM --- Outputs ---
@@ -42,17 +42,25 @@ REM =====================================================
 REM VENTANAS TEMPORALES (FASE A)
 REM =====================================================
 
-set WINDOWS= ^
-2019-01_2020-12 ^
-2021-01_2021-12 ^
-2022-01_2023-06
+set WINDOWS=2019-01_2020-12 2021-01_2021-12 2022-01_2023-06
+
+REM =====================================================
+REM SANITY CHECK (CRÍTICO)
+REM =====================================================
+
+echo =========================================
+echo [SANITY]
+echo DATA=%DATA%
+echo BASE_CFG=%BASE_CFG%
+echo =========================================
+echo.
 
 REM =====================================================
 REM CREAR DIRECTORIOS
 REM =====================================================
 
-if not exist %ROBUST_OUT_DIR% mkdir %ROBUST_OUT_DIR%
-if not exist %PROMO_OUT_DIR% mkdir %PROMO_OUT_DIR%
+if not exist "%ROBUST_OUT_DIR%" mkdir "%ROBUST_OUT_DIR%"
+if not exist "%PROMO_OUT_DIR%" mkdir "%PROMO_OUT_DIR%"
 
 REM =====================================================
 REM FASE A — ROBUST OPTIMIZATION
@@ -68,15 +76,20 @@ for %%W in (%WINDOWS%) do (
         echo =========================================
 
         %PYTHON% %ROBUST_SCRIPT% ^
-            --data %DATA% ^
-            --base-config %BASE_CFG% ^
+            --data "%DATA%" ^
+            --base-config "%BASE_CFG%" ^
             --window %%W ^
             --samples %SAMPLES% ^
             --seed %%S ^
             --workers %WORKERS% ^
             --batch-size %BATCH_SIZE% ^
             --parallel ^
-            --out !OUT_FILE!
+            --out "!OUT_FILE!"
+
+        if errorlevel 1 (
+            echo [ERROR] Robust optimizer failed
+            goto END
+        )
 
         echo [ROBUST] Finished %%W seed %%S
         echo.
@@ -103,8 +116,8 @@ REM =====================================================
 
 set PROMOTED_FILE=%PROMO_OUT_DIR%\faseA_promoted.json
 
-if exist %PROMOTED_FILE% (
-    for %%A in (%PROMOTED_FILE%) do (
+if exist "%PROMOTED_FILE%" (
+    for %%A in ("%PROMOTED_FILE%") do (
         if %%~zA GTR 10 (
             echo =========================================
             echo [PROMOTER] PROMOTION SUCCESS
@@ -120,13 +133,10 @@ echo [PROMOTER] NO PROMOTION
 echo [PROMOTER] Continuing FASE A exploration
 echo =========================================
 
-REM (Opcional)
-REM podés acá re-llamar este mismo .bat o dejar que el scheduler lo reinicie
-
 :END
 echo =========================================
 echo [PIPELINE] FINISHED
 echo =========================================
-
 pause
+
 
