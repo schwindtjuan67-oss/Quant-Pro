@@ -1,6 +1,11 @@
 @echo off
 setlocal ENABLEDELAYEDEXPANSION
 
+REM =====================================
+REM MOVERSE AL ROOT DEL REPO
+REM =====================================
+cd /d "%~dp0\.."
+
 REM =====================================================
 REM CONFIG GENERAL
 REM =====================================================
