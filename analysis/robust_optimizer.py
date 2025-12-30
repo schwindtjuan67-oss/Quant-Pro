@@ -522,6 +522,33 @@ def _worker_backtest_fn(data_slice: Any, params: Dict[str, Any]) -> List[Dict[st
 # ✅ NUEVO: eval usando slices cache (misma lógica, menos overhead)
 # ============================================================
 
+def _worker_eval_batch(params_batch: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    out = []
+    for p in params_batch:
+        try:
+            out.append(_worker_eval_one(p))
+        except MemoryError:
+            out.append({
+                "params": p,
+                "passed": False,
+                "fail_reason": "OOM",
+                "agg": {},
+                "robust_score": -1e9,
+                "folds": [],
+            })
+        except Exception as e:
+            out.append({
+                "params": p,
+                "passed": False,
+                "fail_reason": f"EXCEPTION:{type(e).__name__}",
+                "agg": {},
+                "robust_score": -1e9,
+                "folds": [],
+            })
+    return out
+
+
+
 def _evaluate_params_on_cached_test_slices(
     params: Dict[str, Any],
 ) -> Dict[str, Any]:
@@ -577,20 +604,40 @@ def _evaluate_params_on_cached_test_slices(
 
 
 def _worker_eval_one(params: Dict[str, Any]) -> Dict[str, Any]:
-    # Devuelve dict JSON-safe (para no depender de dataclasses pickling)
     global _WORKER_DATA
     if _WORKER_DATA is None:
         raise RuntimeError("[ROBUST][WORKER] Missing worker data (init not called).")
 
-    er = evaluate_params_walk_forward(
-        data=_WORKER_DATA,
-        params=params,
-        backtest_fn=_worker_backtest_fn,
-        splits=_WORKER_SPLITS,
-        gates=_WORKER_GATES,
-    )
+    try:
+        er = evaluate_params_walk_forward(
+            data=_WORKER_DATA,
+            params=params,
+            backtest_fn=_worker_backtest_fn,
+            splits=_WORKER_SPLITS,
+            gates=_WORKER_GATES,
+        )
+    except MemoryError:
+        # 🔴 OOM explícito
+        return {
+            "params": params,
+            "passed": False,
+            "fail_reason": "OOM",
+            "agg": {},
+            "robust_score": -1e9,
+            "folds": [],
+        }
+    except Exception as e:
+        # 🔴 cualquier otro crash del worker
+        return {
+            "params": params,
+            "passed": False,
+            "fail_reason": f"EXCEPTION: {type(e).__name__}",
+            "agg": {},
+            "robust_score": -1e9,
+            "folds": [],
+        }
 
-    payload = {
+    return {
         "params": er.params,
         "passed": er.passed,
         "fail_reason": er.fail_reason,
@@ -601,18 +648,6 @@ def _worker_eval_one(params: Dict[str, Any]) -> Dict[str, Any]:
             for fr in er.fold_results
         ],
     }
-    return payload
-
-
-# ============================================================
-# ✅ NUEVO: Batch params (cada future evalúa N params)
-# ============================================================
-
-def _worker_eval_batch(params_batch: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    out: List[Dict[str, Any]] = []
-    for p in params_batch:
-        out.append(_evaluate_params_on_cached_test_slices(p))
-    return out
 
 
 # ============================================================
@@ -705,6 +740,11 @@ def run_robust_search(
     interval = "1m"
     warmup = 500
 
+    # --- safety defaults ---
+    param_timeout = float(os.getenv("ROBUST_PARAM_TIMEOUT", "0"))  # 0 = sin timeout
+    batch_size = int(os.getenv("ROBUST_BATCH_SIZE", "1"))          # 1 = modo actual
+
+
     # ✅ NUEVO: batch size via env (si no está, 1 => comportamiento idéntico al anterior)
     batch_env = os.getenv("ROBUST_BATCH_SIZE", "").strip()
     try:
@@ -744,11 +784,38 @@ def run_robust_search(
             done = 0
             for fut in as_completed(futs):
                 done += 1
-                results_payloads.append(fut.result())
+                try:
+                    if param_timeout > 0:
+                        res = fut.result(timeout=param_timeout)
+                    else:
+                        res = fut.result()
+                except TimeoutError:
+                    res = { 
+                        "params": {},
+                        "passed": False,
+                        "fail_reason": "TIMEOUT",
+                        "agg": {},
+                        "robust_score": -1e9,
+                        "folds": [],
+                    }
+                except Exception as e:
+                    res = {
+                        "params": {},
+                        "passed": False,
+                        "fail_reason": f"EXCEPTION: {type(e).__name__}",
+                        "agg": {},
+                        "robust_score": -1e9,
+                        "folds": [],
+                    }
+
+                results_payloads.append(res)
+
                 if progress_every > 0 and (done % progress_every == 0):
-                    print(f"[ROBUST][PAR] done {done}/{len(futs)}")
-        else:
+                    print(f"[ROBUST][PAR] done {done}/{len(params_list)}")
+
             batches: List[List[Dict[str, Any]]] = []
+
+
             for i in range(0, len(params_list), batch_size):
                 batches.append(params_list[i:i + batch_size])
 
