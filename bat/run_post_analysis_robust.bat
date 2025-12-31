@@ -1,19 +1,22 @@
 @echo off
-setlocal enableextensions
+setlocal ENABLEDELAYEDEXPANSION
 
-REM === Ajustá esto si tu venv se llama distinto ===
-set VENV_DIR=.venv
+REM =====================================
+REM MOVERSE AL ROOT DEL REPO
+REM =====================================
+cd /d "%~dp0\.."
 
-if exist "%VENV_DIR%\Scripts\python.exe" (
-  set PY="%VENV_DIR%\Scripts\python.exe"
-) else (
-  set PY=python
-)
+set PYTHON=python
+set POST_SCRIPT=analysis\analysis_post_robust.py
 
-echo [POST] Running post-analysis...
-%PY% post_analysis_robust.py
+echo =========================================
+echo [POST] Running analysis_post_robust.py
+echo =========================================
+
+%PYTHON% %POST_SCRIPT% --verbose
 
 echo.
-echo [POST] Done.
+echo =========================================
+echo [POST] DONE
+echo =========================================
 pause
-
