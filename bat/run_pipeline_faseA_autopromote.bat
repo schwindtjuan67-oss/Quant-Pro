@@ -45,7 +45,7 @@ REM =====================================================
 set WINDOWS=2019-01_2020-12 2021-01_2021-12 2022-01_2023-06
 
 REM =====================================================
-REM SANITY CHECK (CRÍTICO)
+REM SANITY CHECK
 REM =====================================================
 
 echo =========================================
@@ -63,6 +63,17 @@ if not exist "%ROBUST_OUT_DIR%" mkdir "%ROBUST_OUT_DIR%"
 if not exist "%PROMO_OUT_DIR%" mkdir "%PROMO_OUT_DIR%"
 
 REM =====================================================
+REM LOOP MAESTRO — AUTÓNOMO
+REM =====================================================
+
+:FASE_A_LOOP
+
+echo =========================================
+echo [PIPELINE] STARTING FASE A (ROBUST SEARCH)
+echo =========================================
+echo.
+
+REM =====================================================
 REM FASE A — ROBUST OPTIMIZATION
 REM =====================================================
 
@@ -71,9 +82,9 @@ for %%W in (%WINDOWS%) do (
 
         set OUT_FILE=%ROBUST_OUT_DIR%\robust_%%W_seed%%S.json
 
-        echo =========================================
+        echo -----------------------------------------
         echo [ROBUST] WINDOW=%%W  SEED=%%S
-        echo =========================================
+        echo -----------------------------------------
 
         %PYTHON% %ROBUST_SCRIPT% ^
             --data "%DATA%" ^
@@ -88,7 +99,8 @@ for %%W in (%WINDOWS%) do (
 
         if errorlevel 1 (
             echo [ERROR] Robust optimizer failed
-            goto END
+            timeout /t 30
+            goto FASE_A_LOOP
         )
 
         echo [ROBUST] Finished %%W seed %%S
@@ -97,8 +109,9 @@ for %%W in (%WINDOWS%) do (
 )
 
 echo =========================================
-echo [PIPELINE] FASE A COMPLETADA
+echo [PIPELINE] FASE A COMPLETED
 echo =========================================
+echo.
 
 REM =====================================================
 REM POST-ANALYSIS + AUTO-PROMOTION (A → B)
@@ -121,7 +134,7 @@ if exist "%PROMOTED_FILE%" (
         if %%~zA GTR 10 (
             echo =========================================
             echo [PROMOTER] PROMOTION SUCCESS
-            echo [PROMOTER] Ready for FASE B
+            echo [PROMOTER] FASE A → FASE B
             echo =========================================
             goto END
         )
@@ -130,12 +143,18 @@ if exist "%PROMOTED_FILE%" (
 
 echo =========================================
 echo [PROMOTER] NO PROMOTION
-echo [PROMOTER] Continuing FASE A exploration
+echo [PROMOTER] CONTINUING FASE A
 echo =========================================
+echo.
+
+REM --- descanso breve para evitar stress térmico ---
+timeout /t 60
+
+goto FASE_A_LOOP
 
 :END
 echo =========================================
-echo [PIPELINE] FINISHED
+echo [PIPELINE] FINISHED — PROMOTION ACHIEVED
 echo =========================================
 pause
 
