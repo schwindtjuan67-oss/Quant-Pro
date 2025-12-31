@@ -2,77 +2,77 @@
 setlocal ENABLEDELAYEDEXPANSION
 
 REM =====================================================
-REM ROOT
+REM ROOT (moverse al root del repo)
 REM =====================================================
 cd /d "%~dp0\.."
+
+REM --- CRUCIAL: asegurar imports desde el root ---
+set "PYTHONPATH=%CD%"
+set "PYTHON=python"
+
+REM Opcional (recomendado para logs consistentes)
+set "PYTHONIOENCODING=utf-8"
 
 REM =====================================================
 REM CONFIG GENERAL
 REM =====================================================
-set PYTHON=python
+set "DATA=datasets\SOLUSDT\1m"
+set "BASE_CFG=configs\pipeline_research_backtest.json"
 
-set ROBUST_SCRIPT=analysis\robust_optimizer.py
-set POST_A_SCRIPT=analysis\analysis_post_robust.py
-set STAGE_B_SCRIPT=analysis\stage_b_risk_calibration.py
-set STAGE_C_SCRIPT=analysis\stage_c_pipeline_eval.py
-
-set DATA=datasets\SOLUSDT\1m
-set BASE_CFG=configs\pipeline_research_backtest.json
-
-set ROBUST_OUT_DIR=results\robust
-set PROMO_DIR=results\promotions
-set STAGEC_TRADES_DIR=results\pipeline_stageC_trades
-set FROZEN_DIR=results\frozen
-set LOG_DIR=logs
-set LOG_FILE=%LOG_DIR%\autoloop_ABC.log
+set "ROBUST_OUT_DIR=results\robust"
+set "PROMO_DIR=results\promotions"
+set "STAGEC_TRADES_DIR=results\pipeline_stageC_trades"
+set "FROZEN_DIR=results\frozen"
+set "LOG_DIR=logs"
+set "LOG_FILE=%LOG_DIR%\autoloop_ABC.log"
 
 REM ---------------------------
 REM A: recursos
 REM ---------------------------
-set A_WORKERS=3
-set A_BATCH_SIZE=4
-set A_SAMPLES=300
+set "A_WORKERS=3"
+set "A_BATCH_SIZE=4"
+set "A_SAMPLES=300"
 
 REM ---------------------------
 REM B: samples
 REM ---------------------------
-set B_SAMPLES=200
-set B_SEED=1337
+set "B_SAMPLES=200"
+set "B_SEED=1337"
 
 REM ---------------------------
 REM C: options
 REM ---------------------------
-set C_WARMUP=500
-set C_INTERVAL=1m
+set "C_WARMUP=500"
+set "C_INTERVAL=1m"
 
-REM Reglas que pediste (opción 1)
-set STAGEC_REQUIRE_GLOBAL_PASS=1
-set STAGEC_MIN_WINDOWS_OK=2
+REM Reglas Stage C (opción 1)
+set "STAGEC_REQUIRE_GLOBAL_PASS=1"
+set "STAGEC_MIN_WINDOWS_OK=2"
 
 REM ---------------------------
 REM Ventanas (FASE A/B/C)
 REM ---------------------------
-set WINDOWS=2019-01_2020-12 2021-01_2021-12 2022-01_2023-06
+set "WINDOWS=2019-01_2020-12 2021-01_2021-12 2022-01_2023-06"
 
 REM ---------------------------
-REM Autoloop: seeds por ciclo
+REM Autoloop: seeds por ciclo (incremental)
 REM ---------------------------
-set SEEDS_PER_CYCLE=3
-set SEED_STATE_FILE=results\autoloop_seed_base.txt
-set START_SEED=1000
+set "SEEDS_PER_CYCLE=3"
+set "SEED_STATE_FILE=results\autoloop_seed_base.txt"
+set "START_SEED=1000"
 
 REM Pausa entre ciclos (seg)
-set CYCLE_DELAY_SEC=30
+set "CYCLE_DELAY_SEC=30"
 
 REM Si querés que NO se frene aunque haya promovidos en C:
-REM set KEEP_RUNNING=1
-set KEEP_RUNNING=0
+REM set "KEEP_RUNNING=1"
+set "KEEP_RUNNING=0"
 
 REM Shortlist top-N
-set SHORTLIST_N=10
+set "SHORTLIST_N=10"
 
 REM Para stop manual: crear este archivo
-set STOP_FILE=results\STOP_AUTOLOOP.txt
+set "STOP_FILE=results\STOP_AUTOLOOP.txt"
 
 REM =====================================================
 REM INIT DIRS
@@ -91,6 +91,7 @@ if not exist "%SEED_STATE_FILE%" (
 echo =====================================================>>"%LOG_FILE%"
 echo [BOOT] %DATE% %TIME%>>"%LOG_FILE%"
 echo ROOT=%CD%>>"%LOG_FILE%"
+echo PYTHONPATH=%PYTHONPATH%>>"%LOG_FILE%"
 echo DATA=%DATA%>>"%LOG_FILE%"
 echo BASE_CFG=%BASE_CFG%>>"%LOG_FILE%"
 echo WINDOWS=%WINDOWS%>>"%LOG_FILE%"
@@ -110,10 +111,12 @@ REM ---------------------------
 REM next seeds
 REM ---------------------------
 set /p SEED_BASE=<"%SEED_STATE_FILE%"
-set SEED1=%SEED_BASE%
+if "%SEED_BASE%"=="" set "SEED_BASE=%START_SEED%"
+
+set "SEED1=%SEED_BASE%"
 set /a SEED2=SEED_BASE+1
 set /a SEED3=SEED_BASE+2
-set SEEDS=%SEED1% %SEED2% %SEED3%
+set "SEEDS=%SEED1% %SEED2% %SEED3%"
 set /a NEXT_SEED_BASE=SEED_BASE+%SEEDS_PER_CYCLE%
 echo %NEXT_SEED_BASE%>"%SEED_STATE_FILE%"
 
@@ -123,11 +126,11 @@ echo [CYCLE] %DATE% %TIME%  seed_base=%SEED_BASE%  seeds=%SEEDS%>>"%LOG_FILE%"
 REM =====================================================
 REM FASE A (freezeada)
 REM =====================================================
-set PIPELINE_PHASE=A
+set "PIPELINE_PHASE=A"
 
 for %%W in (%WINDOWS%) do (
   for %%S in (%SEEDS%) do (
-    set OUT_FILE=%ROBUST_OUT_DIR%\robust_%%W_seed%%S.json
+    set "OUT_FILE=%ROBUST_OUT_DIR%\robust_%%W_seed%%S.json"
 
     if exist "!OUT_FILE!" (
       echo [A] SKIP exists !OUT_FILE!>>"%LOG_FILE%"
@@ -135,7 +138,7 @@ for %%W in (%WINDOWS%) do (
       echo [A] RUN window=%%W seed=%%S out=!OUT_FILE!>>"%LOG_FILE%"
       echo [A] WINDOW=%%W SEED=%%S
 
-      %PYTHON% %ROBUST_SCRIPT% ^
+      %PYTHON% -m analysis.robust_optimizer ^
         --data "%DATA%" ^
         --base-config "%BASE_CFG%" ^
         --window %%W ^
@@ -149,7 +152,6 @@ for %%W in (%WINDOWS%) do (
       if errorlevel 1 (
         echo [A] ERROR robust failed window=%%W seed=%%S>>"%LOG_FILE%"
         echo [A] ERROR robust failed (see log)
-        REM no abort: seguimos
       )
     )
   )
@@ -158,20 +160,20 @@ for %%W in (%WINDOWS%) do (
 REM =====================================================
 REM POST A (promoción A)
 REM =====================================================
-echo [POSTA] Running %POST_A_SCRIPT%>>"%LOG_FILE%"
-%PYTHON% %POST_A_SCRIPT% >>"%LOG_FILE%" 2>&1
+echo [POSTA] Running analysis.analysis_post_robust>>"%LOG_FILE%"
+%PYTHON% -m analysis.analysis_post_robust >>"%LOG_FILE%" 2>&1
 
 if errorlevel 1 (
   echo [POSTA] ERROR post failed>>"%LOG_FILE%"
 )
 
-set FASEA_FILE=%PROMO_DIR%\faseA_promoted.json
+set "FASEA_FILE=%PROMO_DIR%\faseA_promoted.json"
 if not exist "%FASEA_FILE%" (
   echo [POSTA] No %FASEA_FILE% yet. Continue loop.>>"%LOG_FILE%"
   goto SLEEP
 )
 
-for %%A in ("%FASEA_FILE%") do set FASEA_SIZE=%%~zA
+for %%A in ("%FASEA_FILE%") do set "FASEA_SIZE=%%~zA"
 if "!FASEA_SIZE!" LSS "20" (
   echo [POSTA] %FASEA_FILE% too small (!FASEA_SIZE!). Continue.>>"%LOG_FILE%"
   goto SLEEP
@@ -180,10 +182,10 @@ if "!FASEA_SIZE!" LSS "20" (
 REM =====================================================
 REM FASE B (calibración risk, freeze A)
 REM =====================================================
-set PIPELINE_PHASE=B
+set "PIPELINE_PHASE=B"
 
 echo [B] Running Stage B>>"%LOG_FILE%"
-%PYTHON% %STAGE_B_SCRIPT% ^
+%PYTHON% -m analysis.stage_b_risk_calibration ^
   --data "%DATA%" ^
   --base-config "%BASE_CFG%" ^
   --fasea "%FASEA_FILE%" ^
@@ -197,12 +199,12 @@ if errorlevel 1 (
   goto SLEEP
 )
 
-set FASEB_FILE=%PROMO_DIR%\faseB_promoted.json
+set "FASEB_FILE=%PROMO_DIR%\faseB_promoted.json"
 if not exist "%FASEB_FILE%" (
   echo [B] No %FASEB_FILE% produced. Continue.>>"%LOG_FILE%"
   goto SLEEP
 )
-for %%B in ("%FASEB_FILE%") do set FASEB_SIZE=%%~zB
+for %%B in ("%FASEB_FILE%") do set "FASEB_SIZE=%%~zB"
 if "!FASEB_SIZE!" LSS "20" (
   echo [B] %FASEB_FILE% too small (!FASEB_SIZE!). Continue.>>"%LOG_FILE%"
   goto SLEEP
@@ -211,10 +213,10 @@ if "!FASEB_SIZE!" LSS "20" (
 REM =====================================================
 REM FASE C (pipeline eval real) — opción 1: PASS_GLOBAL + >=2 windows
 REM =====================================================
-set PIPELINE_PHASE=C
+set "PIPELINE_PHASE=C"
 
 echo [C] Running Stage C>>"%LOG_FILE%"
-%PYTHON% %STAGE_C_SCRIPT% ^
+%PYTHON% -m analysis.stage_c_pipeline_eval ^
   --faseb "%FASEB_FILE%" ^
   --data "%DATA%" ^
   --base-config "%BASE_CFG%" ^
@@ -229,13 +231,13 @@ if errorlevel 1 (
   goto SLEEP
 )
 
-set FASEC_FILE=%PROMO_DIR%\faseC_promoted.json
+set "FASEC_FILE=%PROMO_DIR%\faseC_promoted.json"
 if not exist "%FASEC_FILE%" (
   echo [C] No %FASEC_FILE% => keep exploring.>>"%LOG_FILE%"
   goto SLEEP
 )
 
-for %%C in ("%FASEC_FILE%") do set FASEC_SIZE=%%~zC
+for %%C in ("%FASEC_FILE%") do set "FASEC_SIZE=%%~zC"
 if "!FASEC_SIZE!" LSS "20" (
   echo [C] %FASEC_FILE% too small (!FASEC_SIZE!) => keep exploring.>>"%LOG_FILE%"
   goto SLEEP
@@ -244,8 +246,8 @@ if "!FASEC_SIZE!" LSS "20" (
 REM =====================================================
 REM FREEZE SNAPSHOT + SHORTLIST (TOP-N)
 REM =====================================================
-for /f %%t in ('powershell -NoProfile -Command "Get-Date -Format yyyyMMdd_HHmmss"') do set TS=%%t
-set SNAP_DIR=%FROZEN_DIR%\%TS%
+for /f %%t in ('powershell -NoProfile -Command "Get-Date -Format yyyyMMdd_HHmmss"') do set "TS=%%t"
+set "SNAP_DIR=%FROZEN_DIR%\%TS%"
 mkdir "%SNAP_DIR%" >nul 2>&1
 
 copy "%FASEA_FILE%" "%SNAP_DIR%\faseA_promoted.json" >nul
@@ -256,8 +258,7 @@ copy "%FASEC_FILE%" "%SNAP_DIR%\faseC_promoted.json" >nul
 if exist "%PROMO_DIR%\faseC_report.csv" copy "%PROMO_DIR%\faseC_report.csv" "%SNAP_DIR%\" >nul
 
 REM Shortlist TOP-N (robusto a esquemas)
-%PYTHON% -c "import json,sys; p=r'%FASEC_FILE%'; n=int(r'%SHORTLIST_N%'); \
-d=json.load(open(p,'r',encoding='utf-8')); \
+%PYTHON% -c "import json; p=r'%FASEC_FILE%'; n=int(r'%SHORTLIST_N%'); d=json.load(open(p,'r',encoding='utf-8')); \
 def score(x): \
   for k in ('promotion_score','global_score','score','score_v2','score_v1'): \
     v=x.get(k,None); \
@@ -296,4 +297,5 @@ goto LOOP
 echo [END] %DATE% %TIME%>>"%LOG_FILE%"
 echo Done.
 pause
+
 

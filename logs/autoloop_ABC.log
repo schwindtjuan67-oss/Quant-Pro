@@ -153,3 +153,58 @@ WINDOWS=2019-01_2020-12 2021-01_2021-12 2022-01_2023-06
 [ROBUST] finished, top=20
 [ROBUST] saved -> results\robust\robust_2021-01_2021-12_seed1003.json
 [A] RUN window=2021-01_2021-12 seed=1004 out=results\robust\robust_2021-01_2021-12_seed1004.json
+[ROBUST] loading dataset...
+[ROBUST] date_from=2021-01-01 date_to=2021-12-31 window='2021-01_2021-12'
+[ROBUST] data size = 523180
+[ROBUST] Using REAL backtest function (in-memory).
+[ROBUST] Parallel enabled: workers=3 (spawn-safe) batch_size=4
+[ROBUST][PAR] done 100/293 (batch_size=4)
+[ROBUST][PAR] done 200/293 (batch_size=4)
+[ROBUST] finished, top=20
+[ROBUST] saved -> results\robust\robust_2021-01_2021-12_seed1004.json
+[A] RUN window=2021-01_2021-12 seed=1005 out=results\robust\robust_2021-01_2021-12_seed1005.json
+[ROBUST] loading dataset...
+[ROBUST] date_from=2021-01-01 date_to=2021-12-31 window='2021-01_2021-12'
+[ROBUST] data size = 523180
+[ROBUST] Using REAL backtest function (in-memory).
+[ROBUST] Parallel enabled: workers=3 (spawn-safe) batch_size=4
+[ROBUST][PAR] done 100/290 (batch_size=4)
+[ROBUST][PAR] done 200/290 (batch_size=4)
+[ROBUST] finished, top=20
+[ROBUST] saved -> results\robust\robust_2021-01_2021-12_seed1005.json
+[A] RUN window=2022-01_2023-06 seed=1003 out=results\robust\robust_2022-01_2023-06_seed1003.json
+[ROBUST] loading dataset...
+[ROBUST] date_from=2022-01-01 date_to=2023-06-30 window='2022-01_2023-06'
+[ROBUST] data size = 784738
+[ROBUST] Using REAL backtest function (in-memory).
+[ROBUST] Parallel enabled: workers=3 (spawn-safe) batch_size=4
+[ROBUST][PAR] done 100/294 (batch_size=4)
+[ROBUST][PAR] done 200/294 (batch_size=4)
+[ROBUST] finished, top=20
+[ROBUST] saved -> results\robust\robust_2022-01_2023-06_seed1003.json
+[A] RUN window=2022-01_2023-06 seed=1004 out=results\robust\robust_2022-01_2023-06_seed1004.json
+[ROBUST] loading dataset...
+[ROBUST] date_from=2022-01-01 date_to=2023-06-30 window='2022-01_2023-06'
+[ROBUST] data size = 784738
+[ROBUST] Using REAL backtest function (in-memory).
+[ROBUST] Parallel enabled: workers=3 (spawn-safe) batch_size=4
+[ROBUST][PAR] done 100/293 (batch_size=4)
+[ROBUST][PAR] done 200/293 (batch_size=4)
+[ROBUST] finished, top=20
+[ROBUST] saved -> results\robust\robust_2022-01_2023-06_seed1004.json
+[A] RUN window=2022-01_2023-06 seed=1005 out=results\robust\robust_2022-01_2023-06_seed1005.json
+[ROBUST] loading dataset...
+[ROBUST] date_from=2022-01-01 date_to=2023-06-30 window='2022-01_2023-06'
+[ROBUST] data size = 784738
+[ROBUST] Using REAL backtest function (in-memory).
+[ROBUST] Parallel enabled: workers=3 (spawn-safe) batch_size=4
+[ROBUST][PAR] done 100/290 (batch_size=4)
+[ROBUST][PAR] done 200/290 (batch_size=4)
+[ROBUST] finished, top=20
+[ROBUST] saved -> results\robust\robust_2022-01_2023-06_seed1005.json
+[POSTA] Running analysis\analysis_post_robust.py
+Traceback (most recent call last):
+  File "C:\Users\PC\Documents\GitHub\Quant-Pro\analysis\analysis_post_robust.py", line 12, in <module>
+    from analysis.opt_space import phase_keys
+ModuleNotFoundError: No module named 'analysis'
+[POSTA] ERROR post failed
