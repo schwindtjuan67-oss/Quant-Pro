@@ -18,7 +18,7 @@ set POST_SCRIPT=analysis\analysis_post_robust.py
 
 REM --- Data / Config ---
 set DATA=datasets\SOLUSDT\1m
-set BASE_CFG=configs\base_live.json
+set BASE_CFG=configs\pipeline_research_backtest.json
 
 REM --- Outputs ---
 set ROBUST_OUT_DIR=results\robust
