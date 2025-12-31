@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 import math
+import os
 import numpy as np
 
 
@@ -66,21 +67,23 @@ def sample_params(
     # Hard constraints (ANTI-RUIDO)
     # ==========================
     if hard_constraints:
-        # EMA coherente
-        if p["ema_fast"] >= p["ema_slow"]:
-            p["ema_fast"], p["ema_slow"] = min(p["ema_fast"], p["ema_slow"] - 1), p["ema_slow"]
-            if p["ema_fast"] < 2:
-                p["ema_fast"] = 2
-                p["ema_slow"] = max(p["ema_slow"], 5)
+        # EMA coherente (solo si están presentes en este phase-space)
+        if "ema_fast" in p and "ema_slow" in p:
+            if p["ema_fast"] >= p["ema_slow"]:
+                p["ema_fast"], p["ema_slow"] = min(p["ema_fast"], p["ema_slow"] - 1), p["ema_slow"]
+                if p["ema_fast"] < 2:
+                    p["ema_fast"] = 2
+                    p["ema_slow"] = max(p["ema_slow"], 5)
 
-        # RR mínimo y SL/TP coherentes
+        # RR mínimo y SL/TP coherentes (solo si están presentes)
         # (ej: tp_mult >= sl_mult * rr_min)
-        rr_min = p.get("rr_min", 1.2)
-        if p["tp_atr_mult"] < p["sl_atr_mult"] * rr_min:
-            p["tp_atr_mult"] = round(p["sl_atr_mult"] * rr_min, 2)
+        if "tp_atr_mult" in p and "sl_atr_mult" in p:
+            rr_min = p.get("rr_min", 1.2)
+            if p["tp_atr_mult"] < p["sl_atr_mult"] * rr_min:
+                p["tp_atr_mult"] = round(p["sl_atr_mult"] * rr_min, 2)
 
         # Cooldown no ridículo
-        if p["cooldown_sec"] < 0:
+        if "cooldown_sec" in p and p["cooldown_sec"] < 0:
             p["cooldown_sec"] = 0
 
         # Evitar configs ultra-finas (mucho overfit) en umbrales
@@ -123,3 +126,70 @@ def default_param_space() -> Dict[str, Spec]:
         "hour_start": Choice([0, 2, 4, 6]),
         "hour_end": Choice([18, 20, 22, 24]),
     }
+
+
+# ============================================================
+# Phase filtering (A/B/C) — para congelar fases sin re-arquitectura
+#
+# - PIPELINE_PHASE=A  -> samplea SOLO señal (EMAs + delta)
+# - PIPELINE_PHASE=B  -> samplea SOLO risk/ejecución
+# - PIPELINE_PHASE=FULL (default) -> samplea todo (comportamiento legacy)
+#
+# Nota: C no samplea; es evaluación.
+# ============================================================
+
+_PHASE_KEYS = {
+    # Señal / setup (congelable)
+    "A": {
+        "ema_fast",
+        "ema_slow",
+        "delta_threshold",
+        "delta_rolling_sec",
+    },
+    # Risk / ejecución / throttling
+    "B": {
+        "atr_len",
+        "sl_atr_mult",
+        "tp_atr_mult",
+        "rr_min",
+        "cooldown_sec",
+        "max_trades_day",
+        "use_time_filter",
+        "hour_start",
+        "hour_end",
+    },
+}
+
+
+def normalize_phase(phase: Optional[str] = None) -> str:
+    p = (phase or os.getenv("PIPELINE_PHASE", "") or "").strip().upper()
+    if not p:
+        return "FULL"
+    if p in ("C", "EVAL"):
+        return "C"
+    if p in ("A", "B"):
+        return p
+    return "FULL"
+
+
+def phase_keys(phase: Optional[str] = None) -> List[str]:
+    """Devuelve las keys sampleadas en un phase."""
+    p = normalize_phase(phase)
+    if p == "FULL":
+        return []
+    if p == "C":
+        return []
+    return sorted(list(_PHASE_KEYS.get(p, set())))
+
+
+def param_space_for_phase(phase: Optional[str] = None) -> Dict[str, Spec]:
+    """Devuelve el espacio filtrado por phase. FULL devuelve el space completo."""
+    full = default_param_space()
+    p = normalize_phase(phase)
+    if p == "FULL":
+        return full
+    if p == "C":
+        return {}
+
+    allow = _PHASE_KEYS.get(p, set())
+    return {k: v for k, v in full.items() if k in allow}
