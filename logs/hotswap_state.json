@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "created_at": 1767139575,
+  "symbols": {
+    "SOLUSDT": {
+      "active": null,
+      "pending": null,
+      "prev": [],
+      "last_switch_ts": 0,
+      "eval": null
+    }
+  }
+}

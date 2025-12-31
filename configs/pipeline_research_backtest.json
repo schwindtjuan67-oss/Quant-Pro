@@ -9,7 +9,7 @@
     "allow_flip": false,
     "allow_partial_fills": false,
     "slippage": 0.0,
-    "latency_ms": 0
+    "latency_ms": 50
   },
 
   "fees": {

@@ -1,0 +1,1 @@
+trade_id,type,timestamp_ms,ts_utc_iso,ts_local_iso,date_local,time_local,weekday_local,hour_local,minute_local,side,qty,price,entry_price,exit_price,pnl,pnl_pct,pnl_net_est,fee_est,fee_rate,reason,regime,holding_time_sec,atr_entry,sl_initial,risk_usdt,risk_pct_equity,mfe,mae,equity_before,equity_after,pnl_r,meta_json
