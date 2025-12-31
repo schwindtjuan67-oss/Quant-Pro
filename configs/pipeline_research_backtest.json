@@ -1,0 +1,58 @@
+{
+  "profile": "pipeline_research_backtest",
+
+  "symbol": "SOLUSDT",
+  "interval": "1m",
+
+  "engine": {
+    "mode": "BACKTEST",
+    "allow_flip": false,
+    "allow_partial_fills": false,
+    "slippage": 0.0,
+    "latency_ms": 0
+  },
+
+  "fees": {
+    "maker": 0.0002,
+    "taker": 0.0004,
+    "apply_fees": true
+  },
+
+  "risk": {
+    "risk_pct_equity": 0.005,
+    "max_positions": 1,
+    "use_atr_stop": true,
+    "min_rr": 0.8,
+    "max_daily_loss_pct": 0.03
+  },
+
+  "execution": {
+    "one_trade_per_candle": true,
+    "cooldown_candles": 0,
+    "allow_reentry_same_candle": false
+  },
+
+  "filters": {
+    "min_volume": null,
+    "min_atr_pct": null,
+    "session_filter": null
+  },
+
+  "research": {
+    "purpose": "ROBUST_OPTIMIZATION",
+    "min_trades_per_window": 300,
+    "min_r_observations": 200,
+    "reject_if_noisy": true,
+    "drop_outlier_trades": false
+  },
+
+  "logging": {
+    "log_trades": false,
+    "log_equity_curve": false,
+    "log_signals": false
+  },
+
+  "debug": {
+    "enabled": false
+  }
+}
