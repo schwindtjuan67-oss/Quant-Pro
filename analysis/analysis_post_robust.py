@@ -116,7 +116,9 @@ def main() -> None:
             for seed, rec in seed_map.items():
                 if _passes_hard_gates(rec):
                     passed_seeds.append(seed)
-                    robust_scores.append(rec.get("robust_score", -1e9))
+                    agg = rec.get("agg", {}) or {}
+                    robust_scores.append(float(agg.get("robust_score", rec.get("robust_score", -1e9))))
+
 
             if len(passed_seeds) >= MIN_SEED_PASSES:
                 promoted.setdefault(key, {
