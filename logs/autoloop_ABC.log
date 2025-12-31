@@ -1,0 +1,10 @@
+=====================================================
+[BOOT] 31/12/2025 17:34:27,49
+ROOT=C:\Users\PC\Documents\GitHub\Quant-Pro
+DATA=datasets\SOLUSDT\1m
+BASE_CFG=configs\pipeline_research_backtest.json
+WINDOWS=2019-01_2020-12 2021-01_2021-12 2022-01_2023-06
+=====================================================
+----------------------------------------------------
+[CYCLE] 31/12/2025 17:34:27,51  seed_base=1000  seeds=1000 1001 1002
+[A] RUN window=2019-01_2020-12 seed=1000 out=results\robust\robust_2019-01_2020-12_seed1000.json
