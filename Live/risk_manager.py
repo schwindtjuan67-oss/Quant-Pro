@@ -33,7 +33,7 @@ class RiskManager:
         self,
         max_loss_pct: float = 0.03,
         max_dd_pct: float = 0.04,
-        max_trades: int = 12,
+        max_trades: int = 600,
         starting_equity: float = 1000.0,
 
         # --- Soft-limit knobs (institucional / robusto) ---
