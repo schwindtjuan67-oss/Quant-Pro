@@ -1,160 +1,128 @@
 #!/usr/bin/env python3
-# analysis_post_robust.py
-
-from __future__ import annotations
-
+import argparse
 import json
-import os
 import glob
-import statistics
-from typing import Dict, List, Any, Tuple
+import os
+import hashlib
+from collections import defaultdict
 
-# ===============================
-# CONFIG
-# ===============================
-
-ROBUST_DIR = "results/robust"
-OUT_DIR = "results/promotions"
-
-SEEDS = {1337, 2024, 777}
-MIN_SEED_PASSES = 2          # 2 de 3 seeds
-MIN_WINDOWS_PASSES = 2       # 2 de N ventanas
-
-# Hard gates (FASE A)
-GATES = {
-    "min_trades": 300,
-    "min_pf": 1.10,
-    "min_winrate": 0.35,
-    "max_dd_r": 12.0,
-    "min_score_worst": -0.20,
-}
-
-TOP_K_PROMOTED = 30
+import numpy as np
 
 
-# ===============================
-# HELPERS
-# ===============================
-
-def _passes_hard_gates(r: Dict[str, Any]) -> bool:
-    agg = r.get("agg", {})
-    folds = r.get("folds", [])
-
-    trades = agg.get("trades") or max(
-        (f["metrics"].get("trades", 0) for f in folds),
-        default=0
-    )
-
-    pf = agg.get("profit_factor", 0.0)
-    winrate = agg.get("winrate", 0.0)
-    max_dd = abs(agg.get("max_drawdown_r", 999))
-    score_worst = agg.get("score_worst", -999)
-
-    return (
-        trades >= GATES["min_trades"] and
-        pf >= GATES["min_pf"] and
-        winrate >= GATES["min_winrate"] and
-        max_dd <= GATES["max_dd_r"] and
-        score_worst > GATES["min_score_worst"]
-    )
+def params_key(params: dict) -> str:
+    """Hash estable del dict de params"""
+    s = json.dumps(params, sort_keys=True, ensure_ascii=False)
+    return hashlib.md5(s.encode("utf-8")).hexdigest()
 
 
-def promotion_score(scores: List[float]) -> float:
-    if not scores:
-        return -1e9
-    return (
-        statistics.median(scores)
-        - 0.50 * statistics.pstdev(scores)
-        + 0.25 * min(scores)
-    )
+def safe_load_json(fp: str):
+    try:
+        with open(fp, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return None
 
 
-def parse_filename(path: str) -> Tuple[str, int]:
-    """
-    robust_2021-01_2021-12_seed1337.json
-    -> ("2021-01_2021-12", 1337)
-    """
-    name = os.path.basename(path)
-    parts = name.replace(".json", "").split("_seed")
-    return parts[0].replace("robust_", ""), int(parts[1])
-
-
-# ===============================
-# MAIN LOGIC
-# ===============================
-
-def main() -> None:
-    os.makedirs(OUT_DIR, exist_ok=True)
-
-    files = glob.glob(os.path.join(ROBUST_DIR, "robust_*_seed*.json"))
-    if not files:
-        print("[POST] No robust files found.")
-        return
-
-    # window -> param_key -> seed -> record
-    bucket: Dict[str, Dict[str, Dict[int, Dict[str, Any]]]] = {}
-
-    for fp in files:
-        window, seed = parse_filename(fp)
-        if seed not in SEEDS:
+def load_all_results(results_dir: str):
+    rows = []
+    for fp in glob.glob(os.path.join(results_dir, "*.json")):
+        data = safe_load_json(fp)
+        if not isinstance(data, list):
+            # archivo roto/corrupto => lo salteamos sin tumbar pipeline
             continue
 
-        with open(fp, "r", encoding="utf-8") as f:
-            data = json.load(f)
-
         for r in data:
-            key = json.dumps(r["params"], sort_keys=True)
-            bucket.setdefault(window, {}).setdefault(key, {})[seed] = r
+            if not isinstance(r, dict):
+                continue
+            params = r.get("params")
+            if not isinstance(params, dict):
+                continue
 
-    promoted: Dict[str, Dict[str, Any]] = {}
+            agg = r.get("agg") or {}
+            rows.append({
+                "params": params,
+                "key": params_key(params),
+                "robust_score": float(agg.get("robust_score", -1e9)),
+                "passed": bool(r.get("passed", False)),
+                "fail_reason": str(r.get("fail_reason", "") or ""),
+                # EXTRA: si existe, lo agregamos (sirve para gate de trades>=300)
+                "trades": float(agg.get("trades", -1)),
+                "source": os.path.basename(fp),
+            })
+    return rows
 
-    for window, params_map in bucket.items():
-        for key, seed_map in params_map.items():
-            passed_seeds = []
-            robust_scores = []
 
-            for seed, rec in seed_map.items():
-                if _passes_hard_gates(rec):
-                    passed_seeds.append(seed)
-                    agg = rec.get("agg", {}) or {}
-                    robust_scores.append(float(agg.get("robust_score", rec.get("robust_score", -1e9))))
+def aggregate(rows):
+    bucket = defaultdict(list)
+    fails = defaultdict(int)
+
+    for r in rows:
+        if r["passed"]:
+            bucket[r["key"]].append(r)
+        else:
+            fails[r.get("fail_reason", "unknown")] += 1
+
+    summary = []
+    for key, items in bucket.items():
+        scores = [x["robust_score"] for x in items]
+        trades = [x["trades"] for x in items if x.get("trades", -1) >= 0]
+
+        summary.append({
+            "key": key,
+            "params": items[0]["params"],
+            "appearances": len(items),
+            "score_mean": float(np.mean(scores)),
+            "score_std": float(np.std(scores)),
+            "score_min": float(np.min(scores)),
+            "score_max": float(np.max(scores)),
+            "trades_mean": float(np.mean(trades)) if trades else None,
+            "sources": sorted({x["source"] for x in items}),
+        })
+
+    summary.sort(
+        key=lambda x: (
+            x["appearances"],
+            x["score_mean"],
+            -x["score_std"],
+        ),
+        reverse=True,
+    )
+
+    return {
+        "summary": summary,
+        "fails": dict(sorted(fails.items(), key=lambda kv: kv[1], reverse=True)),
+        "raw_rows": len(rows),
+        "survivors": len(summary),
+    }
 
 
-            if len(passed_seeds) >= MIN_SEED_PASSES:
-                promoted.setdefault(key, {
-                    "params": json.loads(key),
-                    "windows": {},
-                    "scores": []
-                })
-                promoted[key]["windows"][window] = {
-                    "seeds": passed_seeds,
-                    "scores": robust_scores,
-                }
-                promoted[key]["scores"].extend(robust_scores)
+def main():
+    ap = argparse.ArgumentParser("analysis_post_robust")
+    ap.add_argument("--results-dir", default="results/robust")
+    ap.add_argument("--out", default="results/post_analysis_summary.json")
+    args = ap.parse_args()
 
-    # persistencia temporal
-    final = []
-    for p in promoted.values():
-        if len(p["windows"]) >= MIN_WINDOWS_PASSES:
-            p["promotion_score"] = promotion_score(p["scores"])
-            final.append(p)
+    rows = load_all_results(args.results_dir)
+    payload = aggregate(rows)
 
-    final.sort(key=lambda x: x["promotion_score"], reverse=True)
-    final = final[:TOP_K_PROMOTED]
+    os.makedirs(os.path.dirname(args.out) or ".", exist_ok=True)
+    with open(args.out, "w", encoding="utf-8") as f:
+        json.dump(payload, f, indent=2, ensure_ascii=False)
 
-    out_path = os.path.join(OUT_DIR, "faseA_promoted.json")
-    with open(out_path, "w", encoding="utf-8") as f:
-        json.dump(final, f, indent=2, ensure_ascii=False)
+    print(f"[POST] Total raw runs: {payload['raw_rows']}")
+    print(f"[POST] Survivors (unique param sets): {payload['survivors']}")
+    print(f"[POST] Saved -> {args.out}")
 
-    print("=========================================")
-    print(f"[POST] Promoted candidates: {len(final)}")
-    print(f"[POST] Saved -> {out_path}")
-    print("=========================================")
-
-    if not final:
-        print("[POST] No promotion. Pipeline should continue Fase A.")
-    else:
-        print("[POST] Promotion SUCCESS. Ready for Fase B.")
+    top = payload["summary"][:5]
+    if top:
+        print("\nTop 5 candidates:")
+        for s in top:
+            print(
+                f"- appear={s['appearances']} "
+                f"mean={s['score_mean']:.2f} "
+                f"std={s['score_std']:.2f} "
+                f"trades_mean={s['trades_mean']}"
+            )
 
 
 if __name__ == "__main__":
