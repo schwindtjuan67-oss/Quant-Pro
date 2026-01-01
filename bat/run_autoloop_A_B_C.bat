@@ -2,9 +2,25 @@
 setlocal ENABLEDELAYEDEXPANSION
 
 REM =====================================================
-REM ROOT
+REM HARD FAIL SAFE – detectar contexto inválido
 REM =====================================================
-cd /d "%~dp0\.."
+set "SCRIPT_DIR=%~dp0"
+if "%SCRIPT_DIR%"=="" (
+  echo [FATAL] SCRIPT_DIR unresolved
+  pause
+  exit /b 1
+)
+
+REM Normalizar ruta (sin barra final)
+set "SCRIPT_DIR=%SCRIPT_DIR:~0,-1%"
+
+REM Moverse al ROOT del repo
+cd /d "%SCRIPT_DIR%\.." || (
+  echo [FATAL] Cannot cd to repo root
+  pause
+  exit /b 1
+)
+
 set "ROOT=%CD%"
 
 REM =====================================================
@@ -14,13 +30,13 @@ set "PYTHON=python"
 set "PYTHONPATH=%ROOT%"
 set "PYTHONIOENCODING=utf-8"
 
-REM asegurar package analysis
-if not exist "analysis\__init__.py" (
-  type nul > "analysis\__init__.py"
+REM Asegurar analysis como package
+if not exist "%ROOT%\analysis\__init__.py" (
+  type nul > "%ROOT%\analysis\__init__.py"
 )
 
 REM =====================================================
-REM CONFIG GENERAL (INTACTA)
+REM CONFIG GENERAL (FEATURE-COMPLETE)
 REM =====================================================
 set "DATA=datasets\SOLUSDT\1m"
 set "BASE_CFG=configs\pipeline_research_backtest.json"
@@ -82,8 +98,17 @@ for %%D in ("%LOG_DIR%" "%ROBUST_OUT_DIR%" "%ROBUST_LEGACY_DIR%" "%PROMO_DIR%" "
 )
 
 REM =====================================================
-REM LOG BOOT
+REM LOG BOOT (VISIBLE + FILE)
 REM =====================================================
+echo =====================================================
+echo [BOOT] %DATE% %TIME%
+echo ROOT=%ROOT%
+echo PYTHONPATH=%PYTHONPATH%
+echo DATA=%DATA%
+echo BASE_CFG=%BASE_CFG%
+echo WINDOWS=%WINDOWS%
+echo =====================================================
+
 >>"%LOG_FILE%" echo =====================================================
 >>"%LOG_FILE%" echo [BOOT] %DATE% %TIME%
 >>"%LOG_FILE%" echo ROOT=%ROOT%
@@ -94,14 +119,21 @@ REM =====================================================
 >>"%LOG_FILE%" echo =====================================================
 
 REM =====================================================
-REM LOCK + STALE RECOVERY (INTACTO)
+REM LOCK + STALE RECOVERY (NO SILENT EXIT)
 REM =====================================================
 if exist "%LOCK_FILE%" (
   powershell -NoProfile -Command ^
     "$p='%LOCK_FILE%';" ^
     "$age=(New-TimeSpan -Start (Get-Item $p).LastWriteTime -End (Get-Date)).TotalMinutes;" ^
     "if($age -gt %LOCK_STALE_MIN%){ Remove-Item -Force $p; exit 0 } else { exit 1 }"
-  if errorlevel 1 goto END
+  if errorlevel 1 (
+    echo [LOCK] Active lock exists. Another instance running.
+    >>"%LOG_FILE%" echo [LOCK] Active lock exists.
+    goto END
+  ) else (
+    echo [LOCK] Stale lock removed.
+    >>"%LOG_FILE%" echo [LOCK] Stale lock removed.
+  )
 )
 
 echo %DATE% %TIME%>"%LOCK_FILE%"
@@ -135,10 +167,16 @@ echo %DATE% %TIME%>"%HEARTBEAT_FILE%"
 set /p SEED_BASE=<"%SEED_STATE_FILE%"
 if "%SEED_BASE%"=="" set "SEED_BASE=%START_SEED%"
 
-set "SEEDS=%SEED_BASE% %SEED_BASE%+1 %SEED_BASE%+2"
+set /a S1=SEED_BASE
+set /a S2=SEED_BASE+1
+set /a S3=SEED_BASE+2
+set "SEEDS=%S1% %S2% %S3%"
+
 set /a NEXT_SEED_BASE=SEED_BASE+%SEEDS_PER_CYCLE%
 echo %NEXT_SEED_BASE%>"%SEED_STATE_FILE%"
 
+echo ----------------------------------------------------
+echo [CYCLE] seed_base=%SEED_BASE% seeds=%SEEDS%
 >>"%LOG_FILE%" echo [CYCLE] seed_base=%SEED_BASE% seeds=%SEEDS%
 
 REM =========================
@@ -150,6 +188,7 @@ for %%W in (%WINDOWS%) do (
   for %%S in (%SEEDS%) do (
     set "OUT=%ROBUST_OUT_DIR%\robust_%%W_seed%%S.json"
     if not exist "!OUT!" (
+      echo [A] RUN window=%%W seed=%%S
       %PYTHON% -m analysis.robust_optimizer ^
         --data "%DATA%" ^
         --base-config "%BASE_CFG%" ^
@@ -192,6 +231,7 @@ REM END
 REM =====================================================
 :END
 del "%LOCK_FILE%" >nul 2>&1
+echo [END] %DATE% %TIME%
 >>"%LOG_FILE%" echo [END] %DATE% %TIME%
 pause
 
