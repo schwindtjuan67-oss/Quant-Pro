@@ -383,3 +383,122 @@ DATA=datasets\SOLUSDT\1m
 BASE_CFG=configs\pipeline_research_backtest.json
 WINDOWS=2019-01_2020-12 2021-01_2021-12 2022-01_2023-06
 =====================================================
+=====================================================
+[BOOT] 31/12/2025 20:59:20,28
+ROOT=C:\Users\PC\Documents\GitHub\Quant-Pro
+PYTHONPATH=C:\Users\PC\Documents\GitHub\Quant-Pro
+DATA=datasets\SOLUSDT\1m
+BASE_CFG=configs\pipeline_research_backtest.json
+WINDOWS=2019-01_2020-12 2021-01_2021-12 2022-01_2023-06
+=====================================================
+[CYCLE] seed_base=1009 seeds=1009 1009+1 1009+2
+[ROBUST] loading dataset...
+[ROBUST] date_from=2019-01-01 date_to=2020-12-31 window='2019-01_2020-12'
+[ROBUST] data size = 203752
+[ROBUST] Using REAL backtest function (in-memory).
+[ROBUST] Parallel enabled: workers=3 (spawn-safe) batch_size=4
+[ROBUST][PAR] done 100/290 (batch_size=4)
+[ROBUST][PAR] done 200/290 (batch_size=4)
+[ROBUST] finished, top=20
+[ROBUST] saved -> results\robust\robust_2019-01_2020-12_seed1009.json
+usage: robust_optimizer [-h] --data DATA --out OUT [--samples SAMPLES]
+                        [--seed SEED] [--window WINDOW]
+                        [--from-date FROM_DATE] [--to-date TO_DATE]
+                        [--debug-loader] [--min-candles MIN_CANDLES]
+                        [--use-dummy] [--base-config BASE_CONFIG]
+                        [--symbol SYMBOL] [--interval INTERVAL]
+                        [--warmup WARMUP] [--workers WORKERS] [--parallel]
+                        [--batch-size BATCH_SIZE]
+robust_optimizer: error: argument --seed: invalid int value: '1009+1'
+usage: robust_optimizer [-h] --data DATA --out OUT [--samples SAMPLES]
+                        [--seed SEED] [--window WINDOW]
+                        [--from-date FROM_DATE] [--to-date TO_DATE]
+                        [--debug-loader] [--min-candles MIN_CANDLES]
+                        [--use-dummy] [--base-config BASE_CONFIG]
+                        [--symbol SYMBOL] [--interval INTERVAL]
+                        [--warmup WARMUP] [--workers WORKERS] [--parallel]
+                        [--batch-size BATCH_SIZE]
+robust_optimizer: error: argument --seed: invalid int value: '1009+2'
+[ROBUST] loading dataset...
+[ROBUST] date_from=2021-01-01 date_to=2021-12-31 window='2021-01_2021-12'
+[ROBUST] data size = 523180
+[ROBUST] Using REAL backtest function (in-memory).
+[ROBUST] Parallel enabled: workers=3 (spawn-safe) batch_size=4
+[ROBUST][PAR] done 100/290 (batch_size=4)
+[ROBUST][PAR] done 200/290 (batch_size=4)
+[ROBUST] finished, top=20
+[ROBUST] saved -> results\robust\robust_2021-01_2021-12_seed1009.json
+usage: robust_optimizer [-h] --data DATA --out OUT [--samples SAMPLES]
+                        [--seed SEED] [--window WINDOW]
+                        [--from-date FROM_DATE] [--to-date TO_DATE]
+                        [--debug-loader] [--min-candles MIN_CANDLES]
+                        [--use-dummy] [--base-config BASE_CONFIG]
+                        [--symbol SYMBOL] [--interval INTERVAL]
+                        [--warmup WARMUP] [--workers WORKERS] [--parallel]
+                        [--batch-size BATCH_SIZE]
+robust_optimizer: error: argument --seed: invalid int value: '1009+1'
+usage: robust_optimizer [-h] --data DATA --out OUT [--samples SAMPLES]
+                        [--seed SEED] [--window WINDOW]
+                        [--from-date FROM_DATE] [--to-date TO_DATE]
+                        [--debug-loader] [--min-candles MIN_CANDLES]
+                        [--use-dummy] [--base-config BASE_CONFIG]
+                        [--symbol SYMBOL] [--interval INTERVAL]
+                        [--warmup WARMUP] [--workers WORKERS] [--parallel]
+                        [--batch-size BATCH_SIZE]
+robust_optimizer: error: argument --seed: invalid int value: '1009+2'
+[ROBUST] loading dataset...
+[ROBUST] date_from=2022-01-01 date_to=2023-06-30 window='2022-01_2023-06'
+[ROBUST] data size = 784738
+[ROBUST] Using REAL backtest function (in-memory).
+[ROBUST] Parallel enabled: workers=3 (spawn-safe) batch_size=4
+[ROBUST][PAR] done 100/290 (batch_size=4)
+[ROBUST][PAR] done 200/290 (batch_size=4)
+[ROBUST] finished, top=20
+[ROBUST] saved -> results\robust\robust_2022-01_2023-06_seed1009.json
+usage: robust_optimizer [-h] --data DATA --out OUT [--samples SAMPLES]
+                        [--seed SEED] [--window WINDOW]
+                        [--from-date FROM_DATE] [--to-date TO_DATE]
+                        [--debug-loader] [--min-candles MIN_CANDLES]
+                        [--use-dummy] [--base-config BASE_CONFIG]
+                        [--symbol SYMBOL] [--interval INTERVAL]
+                        [--warmup WARMUP] [--workers WORKERS] [--parallel]
+                        [--batch-size BATCH_SIZE]
+robust_optimizer: error: argument --seed: invalid int value: '1009+1'
+usage: robust_optimizer [-h] --data DATA --out OUT [--samples SAMPLES]
+                        [--seed SEED] [--window WINDOW]
+                        [--from-date FROM_DATE] [--to-date TO_DATE]
+                        [--debug-loader] [--min-candles MIN_CANDLES]
+                        [--use-dummy] [--base-config BASE_CONFIG]
+                        [--symbol SYMBOL] [--interval INTERVAL]
+                        [--warmup WARMUP] [--workers WORKERS] [--parallel]
+                        [--batch-size BATCH_SIZE]
+robust_optimizer: error: argument --seed: invalid int value: '1009+2'
+=========================================
+[POST] Promoted candidates: 0
+[POST] Saved -> results/promotions\faseA_promoted.json
+[POST][WARN] Skipped 180 records not generated with PIPELINE_PHASE=A
+=========================================
+[POST] No promotion. Pipeline should continue Fase A.
+C:\Python314\python.exe: No module named analysis.promoter_faseAto_B
+============================================================
+[STAGE B] Risk calibration
+data=datasets/SOLUSDT/1m
+base_config=configs/pipeline_research_backtest.json
+faseA=results/promotions/faseA_promoted.json candidates=0
+samples/window=200
+============================================================
+============================================================
+[STAGE B] promoted: 0
+[STAGE B] wrote: results/promotions/faseB_promoted.json
+[STAGE B] wrote: results/promotions/faseB_report.csv
+============================================================
+Traceback (most recent call last):
+  File "<frozen runpy>", line 189, in _run_module_as_main
+  File "<frozen runpy>", line 159, in _get_module_details
+  File "<frozen importlib._bootstrap_external>", line 896, in get_code
+  File "<frozen importlib._bootstrap_external>", line 826, in source_to_code
+  File "<frozen importlib._bootstrap>", line 491, in _call_with_frames_removed
+  File "C:\Users\PC\Documents\GitHub\Quant-Pro\analysis\stage_c_pipeline_eval.py", line 508
+    global STAGEC_MIN_WINDOWS_OK, STAGEC_REQUIRE_GLOBAL_PASS
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+SyntaxError: name 'STAGEC_MIN_WINDOWS_OK' is used prior to global declaration

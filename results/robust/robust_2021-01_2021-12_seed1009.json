@@ -1,0 +1,582 @@
+[
+  {
+    "params": {
+      "ema_fast": 8,
+      "ema_slow": 66,
+      "delta_threshold": 80,
+      "delta_rolling_sec": 30
+    },
+    "passed": false,
+    "fail_reason": "EXCEPTION:RuntimeError",
+    "robust_score": -1000000000.0,
+    "agg": {},
+    "folds": [],
+    "meta": {
+      "pipeline_phase": "A",
+      "space_keys": [
+        "delta_rolling_sec",
+        "delta_threshold",
+        "ema_fast",
+        "ema_slow"
+      ],
+      "symbol": null,
+      "interval": "1m",
+      "window": "2021-01_2021-12",
+      "seed": 1009,
+      "samples": 300,
+      "workers": 3,
+      "batch_size": 4
+    }
+  },
+  {
+    "params": {
+      "ema_fast": 6,
+      "ema_slow": 34,
+      "delta_threshold": 160,
+      "delta_rolling_sec": 15
+    },
+    "passed": false,
+    "fail_reason": "EXCEPTION:RuntimeError",
+    "robust_score": -1000000000.0,
+    "agg": {},
+    "folds": [],
+    "meta": {
+      "pipeline_phase": "A",
+      "space_keys": [
+        "delta_rolling_sec",
+        "delta_threshold",
+        "ema_fast",
+        "ema_slow"
+      ],
+      "symbol": null,
+      "interval": "1m",
+      "window": "2021-01_2021-12",
+      "seed": 1009,
+      "samples": 300,
+      "workers": 3,
+      "batch_size": 4
+    }
+  },
+  {
+    "params": {
+      "ema_fast": 14,
+      "ema_slow": 18,
+      "delta_threshold": 160,
+      "delta_rolling_sec": 30
+    },
+    "passed": false,
+    "fail_reason": "EXCEPTION:RuntimeError",
+    "robust_score": -1000000000.0,
+    "agg": {},
+    "folds": [],
+    "meta": {
+      "pipeline_phase": "A",
+      "space_keys": [
+        "delta_rolling_sec",
+        "delta_threshold",
+        "ema_fast",
+        "ema_slow"
+      ],
+      "symbol": null,
+      "interval": "1m",
+      "window": "2021-01_2021-12",
+      "seed": 1009,
+      "samples": 300,
+      "workers": 3,
+      "batch_size": 4
+    }
+  },
+  {
+    "params": {
+      "ema_fast": 18,
+      "ema_slow": 62,
+      "delta_threshold": 70,
+      "delta_rolling_sec": 60
+    },
+    "passed": false,
+    "fail_reason": "EXCEPTION:RuntimeError",
+    "robust_score": -1000000000.0,
+    "agg": {},
+    "folds": [],
+    "meta": {
+      "pipeline_phase": "A",
+      "space_keys": [
+        "delta_rolling_sec",
+        "delta_threshold",
+        "ema_fast",
+        "ema_slow"
+      ],
+      "symbol": null,
+      "interval": "1m",
+      "window": "2021-01_2021-12",
+      "seed": 1009,
+      "samples": 300,
+      "workers": 3,
+      "batch_size": 4
+    }
+  },
+  {
+    "params": {
+      "ema_fast": 16,
+      "ema_slow": 18,
+      "delta_threshold": 110,
+      "delta_rolling_sec": 15
+    },
+    "passed": false,
+    "fail_reason": "EXCEPTION:RuntimeError",
+    "robust_score": -1000000000.0,
+    "agg": {},
+    "folds": [],
+    "meta": {
+      "pipeline_phase": "A",
+      "space_keys": [
+        "delta_rolling_sec",
+        "delta_threshold",
+        "ema_fast",
+        "ema_slow"
+      ],
+      "symbol": null,
+      "interval": "1m",
+      "window": "2021-01_2021-12",
+      "seed": 1009,
+      "samples": 300,
+      "workers": 3,
+      "batch_size": 4
+    }
+  },
+  {
+    "params": {
+      "ema_fast": 10,
+      "ema_slow": 18,
+      "delta_threshold": 110,
+      "delta_rolling_sec": 15
+    },
+    "passed": false,
+    "fail_reason": "EXCEPTION:RuntimeError",
+    "robust_score": -1000000000.0,
+    "agg": {},
+    "folds": [],
+    "meta": {
+      "pipeline_phase": "A",
+      "space_keys": [
+        "delta_rolling_sec",
+        "delta_threshold",
+        "ema_fast",
+        "ema_slow"
+      ],
+      "symbol": null,
+      "interval": "1m",
+      "window": "2021-01_2021-12",
+      "seed": 1009,
+      "samples": 300,
+      "workers": 3,
+      "batch_size": 4
+    }
+  },
+  {
+    "params": {
+      "ema_fast": 18,
+      "ema_slow": 70,
+      "delta_threshold": 110,
+      "delta_rolling_sec": 30
+    },
+    "passed": false,
+    "fail_reason": "EXCEPTION:RuntimeError",
+    "robust_score": -1000000000.0,
+    "agg": {},
+    "folds": [],
+    "meta": {
+      "pipeline_phase": "A",
+      "space_keys": [
+        "delta_rolling_sec",
+        "delta_threshold",
+        "ema_fast",
+        "ema_slow"
+      ],
+      "symbol": null,
+      "interval": "1m",
+      "window": "2021-01_2021-12",
+      "seed": 1009,
+      "samples": 300,
+      "workers": 3,
+      "batch_size": 4
+    }
+  },
+  {
+    "params": {
+      "ema_fast": 18,
+      "ema_slow": 50,
+      "delta_threshold": 50,
+      "delta_rolling_sec": 30
+    },
+    "passed": false,
+    "fail_reason": "EXCEPTION:RuntimeError",
+    "robust_score": -1000000000.0,
+    "agg": {},
+    "folds": [],
+    "meta": {
+      "pipeline_phase": "A",
+      "space_keys": [
+        "delta_rolling_sec",
+        "delta_threshold",
+        "ema_fast",
+        "ema_slow"
+      ],
+      "symbol": null,
+      "interval": "1m",
+      "window": "2021-01_2021-12",
+      "seed": 1009,
+      "samples": 300,
+      "workers": 3,
+      "batch_size": 4
+    }
+  },
+  {
+    "params": {
+      "ema_fast": 12,
+      "ema_slow": 42,
+      "delta_threshold": 50,
+      "delta_rolling_sec": 60
+    },
+    "passed": false,
+    "fail_reason": "EXCEPTION:RuntimeError",
+    "robust_score": -1000000000.0,
+    "agg": {},
+    "folds": [],
+    "meta": {
+      "pipeline_phase": "A",
+      "space_keys": [
+        "delta_rolling_sec",
+        "delta_threshold",
+        "ema_fast",
+        "ema_slow"
+      ],
+      "symbol": null,
+      "interval": "1m",
+      "window": "2021-01_2021-12",
+      "seed": 1009,
+      "samples": 300,
+      "workers": 3,
+      "batch_size": 4
+    }
+  },
+  {
+    "params": {
+      "ema_fast": 8,
+      "ema_slow": 34,
+      "delta_threshold": 40,
+      "delta_rolling_sec": 30
+    },
+    "passed": false,
+    "fail_reason": "EXCEPTION:RuntimeError",
+    "robust_score": -1000000000.0,
+    "agg": {},
+    "folds": [],
+    "meta": {
+      "pipeline_phase": "A",
+      "space_keys": [
+        "delta_rolling_sec",
+        "delta_threshold",
+        "ema_fast",
+        "ema_slow"
+      ],
+      "symbol": null,
+      "interval": "1m",
+      "window": "2021-01_2021-12",
+      "seed": 1009,
+      "samples": 300,
+      "workers": 3,
+      "batch_size": 4
+    }
+  },
+  {
+    "params": {
+      "ema_fast": 12,
+      "ema_slow": 50,
+      "delta_threshold": 130,
+      "delta_rolling_sec": 15
+    },
+    "passed": false,
+    "fail_reason": "EXCEPTION:RuntimeError",
+    "robust_score": -1000000000.0,
+    "agg": {},
+    "folds": [],
+    "meta": {
+      "pipeline_phase": "A",
+      "space_keys": [
+        "delta_rolling_sec",
+        "delta_threshold",
+        "ema_fast",
+        "ema_slow"
+      ],
+      "symbol": null,
+      "interval": "1m",
+      "window": "2021-01_2021-12",
+      "seed": 1009,
+      "samples": 300,
+      "workers": 3,
+      "batch_size": 4
+    }
+  },
+  {
+    "params": {
+      "ema_fast": 16,
+      "ema_slow": 62,
+      "delta_threshold": 140,
+      "delta_rolling_sec": 15
+    },
+    "passed": false,
+    "fail_reason": "EXCEPTION:RuntimeError",
+    "robust_score": -1000000000.0,
+    "agg": {},
+    "folds": [],
+    "meta": {
+      "pipeline_phase": "A",
+      "space_keys": [
+        "delta_rolling_sec",
+        "delta_threshold",
+        "ema_fast",
+        "ema_slow"
+      ],
+      "symbol": null,
+      "interval": "1m",
+      "window": "2021-01_2021-12",
+      "seed": 1009,
+      "samples": 300,
+      "workers": 3,
+      "batch_size": 4
+    }
+  },
+  {
+    "params": {
+      "ema_fast": 10,
+      "ema_slow": 18,
+      "delta_threshold": 70,
+      "delta_rolling_sec": 15
+    },
+    "passed": false,
+    "fail_reason": "EXCEPTION:RuntimeError",
+    "robust_score": -1000000000.0,
+    "agg": {},
+    "folds": [],
+    "meta": {
+      "pipeline_phase": "A",
+      "space_keys": [
+        "delta_rolling_sec",
+        "delta_threshold",
+        "ema_fast",
+        "ema_slow"
+      ],
+      "symbol": null,
+      "interval": "1m",
+      "window": "2021-01_2021-12",
+      "seed": 1009,
+      "samples": 300,
+      "workers": 3,
+      "batch_size": 4
+    }
+  },
+  {
+    "params": {
+      "ema_fast": 10,
+      "ema_slow": 70,
+      "delta_threshold": 110,
+      "delta_rolling_sec": 30
+    },
+    "passed": false,
+    "fail_reason": "EXCEPTION:RuntimeError",
+    "robust_score": -1000000000.0,
+    "agg": {},
+    "folds": [],
+    "meta": {
+      "pipeline_phase": "A",
+      "space_keys": [
+        "delta_rolling_sec",
+        "delta_threshold",
+        "ema_fast",
+        "ema_slow"
+      ],
+      "symbol": null,
+      "interval": "1m",
+      "window": "2021-01_2021-12",
+      "seed": 1009,
+      "samples": 300,
+      "workers": 3,
+      "batch_size": 4
+    }
+  },
+  {
+    "params": {
+      "ema_fast": 12,
+      "ema_slow": 70,
+      "delta_threshold": 140,
+      "delta_rolling_sec": 60
+    },
+    "passed": false,
+    "fail_reason": "EXCEPTION:RuntimeError",
+    "robust_score": -1000000000.0,
+    "agg": {},
+    "folds": [],
+    "meta": {
+      "pipeline_phase": "A",
+      "space_keys": [
+        "delta_rolling_sec",
+        "delta_threshold",
+        "ema_fast",
+        "ema_slow"
+      ],
+      "symbol": null,
+      "interval": "1m",
+      "window": "2021-01_2021-12",
+      "seed": 1009,
+      "samples": 300,
+      "workers": 3,
+      "batch_size": 4
+    }
+  },
+  {
+    "params": {
+      "ema_fast": 16,
+      "ema_slow": 50,
+      "delta_threshold": 140,
+      "delta_rolling_sec": 60
+    },
+    "passed": false,
+    "fail_reason": "EXCEPTION:RuntimeError",
+    "robust_score": -1000000000.0,
+    "agg": {},
+    "folds": [],
+    "meta": {
+      "pipeline_phase": "A",
+      "space_keys": [
+        "delta_rolling_sec",
+        "delta_threshold",
+        "ema_fast",
+        "ema_slow"
+      ],
+      "symbol": null,
+      "interval": "1m",
+      "window": "2021-01_2021-12",
+      "seed": 1009,
+      "samples": 300,
+      "workers": 3,
+      "batch_size": 4
+    }
+  },
+  {
+    "params": {
+      "ema_fast": 10,
+      "ema_slow": 18,
+      "delta_threshold": 160,
+      "delta_rolling_sec": 15
+    },
+    "passed": false,
+    "fail_reason": "EXCEPTION:RuntimeError",
+    "robust_score": -1000000000.0,
+    "agg": {},
+    "folds": [],
+    "meta": {
+      "pipeline_phase": "A",
+      "space_keys": [
+        "delta_rolling_sec",
+        "delta_threshold",
+        "ema_fast",
+        "ema_slow"
+      ],
+      "symbol": null,
+      "interval": "1m",
+      "window": "2021-01_2021-12",
+      "seed": 1009,
+      "samples": 300,
+      "workers": 3,
+      "batch_size": 4
+    }
+  },
+  {
+    "params": {
+      "ema_fast": 16,
+      "ema_slow": 74,
+      "delta_threshold": 150,
+      "delta_rolling_sec": 15
+    },
+    "passed": false,
+    "fail_reason": "EXCEPTION:RuntimeError",
+    "robust_score": -1000000000.0,
+    "agg": {},
+    "folds": [],
+    "meta": {
+      "pipeline_phase": "A",
+      "space_keys": [
+        "delta_rolling_sec",
+        "delta_threshold",
+        "ema_fast",
+        "ema_slow"
+      ],
+      "symbol": null,
+      "interval": "1m",
+      "window": "2021-01_2021-12",
+      "seed": 1009,
+      "samples": 300,
+      "workers": 3,
+      "batch_size": 4
+    }
+  },
+  {
+    "params": {
+      "ema_fast": 6,
+      "ema_slow": 66,
+      "delta_threshold": 80,
+      "delta_rolling_sec": 15
+    },
+    "passed": false,
+    "fail_reason": "EXCEPTION:RuntimeError",
+    "robust_score": -1000000000.0,
+    "agg": {},
+    "folds": [],
+    "meta": {
+      "pipeline_phase": "A",
+      "space_keys": [
+        "delta_rolling_sec",
+        "delta_threshold",
+        "ema_fast",
+        "ema_slow"
+      ],
+      "symbol": null,
+      "interval": "1m",
+      "window": "2021-01_2021-12",
+      "seed": 1009,
+      "samples": 300,
+      "workers": 3,
+      "batch_size": 4
+    }
+  },
+  {
+    "params": {
+      "ema_fast": 8,
+      "ema_slow": 34,
+      "delta_threshold": 160,
+      "delta_rolling_sec": 30
+    },
+    "passed": false,
+    "fail_reason": "EXCEPTION:RuntimeError",
+    "robust_score": -1000000000.0,
+    "agg": {},
+    "folds": [],
+    "meta": {
+      "pipeline_phase": "A",
+      "space_keys": [
+        "delta_rolling_sec",
+        "delta_threshold",
+        "ema_fast",
+        "ema_slow"
+      ],
+      "symbol": null,
+      "interval": "1m",
+      "window": "2021-01_2021-12",
+      "seed": 1009,
+      "samples": 300,
+      "workers": 3,
+      "batch_size": 4
+    }
+  }
+]
