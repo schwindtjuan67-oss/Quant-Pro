@@ -1,4 +1,5 @@
 :v
+(el readme quedó obsoleto)
 
 **QuantBot**
 
