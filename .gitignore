@@ -30,3 +30,8 @@ Thumbs.db
 *.sqlite3
 
 # Nota: no se ignoran `logs/`, ni `*.csv`, ni `state_*.json` para conservar históricos importantes.
+node_modules
+
+#Resultados: 
+
+results/
