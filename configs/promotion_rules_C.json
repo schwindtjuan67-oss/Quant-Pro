@@ -1,0 +1,22 @@
+{
+  "phase": "C final",
+
+  "top_n": 10,
+
+  "min_runs": 3,
+  "min_unique_seeds": 3,
+  "min_unique_windows": 3,
+
+  "min_pass_rate": 0.60,
+
+  "min_robust_mean": 0.05,
+  "min_expectancy_mean": 0.02,
+
+  "min_trades_total_mean": 150,
+  "min_trades_total_min": 80,
+
+  "max_dd_max": 20.0,
+
+  "min_pf_mean": 1.10,
+  "min_winrate_mean": 0.38
+}

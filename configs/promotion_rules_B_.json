@@ -1,0 +1,23 @@
+{
+  "phase": "B to C",
+
+  "top_n": 20,
+
+  "min_runs": 2,
+  "min_unique_seeds": 2,
+  "min_unique_windows": 2,
+
+  "min_pass_rate": 0.40,
+
+  "min_robust_mean": 0.02,
+  "min_expectancy_mean": 0.01,
+
+  "min_trades_total_mean": 80,
+  "min_trades_total_min": 40,
+
+  "max_dd_max": 30.0,
+
+  "min_pf_mean": 1.05,
+  "min_winrate_mean": 0.33
+}
+
