@@ -11,10 +11,7 @@ if "%SCRIPT_DIR%"=="" (
   exit /b 1
 )
 
-REM Normalizar ruta (sin barra final)
 set "SCRIPT_DIR=%SCRIPT_DIR:~0,-1%"
-
-REM Moverse al ROOT del repo
 cd /d "%SCRIPT_DIR%\.." || (
   echo [FATAL] Cannot cd to repo root
   pause
@@ -30,13 +27,12 @@ set "PYTHON=python"
 set "PYTHONPATH=%ROOT%"
 set "PYTHONIOENCODING=utf-8"
 
-REM Asegurar analysis como package
 if not exist "%ROOT%\analysis\__init__.py" (
   type nul > "%ROOT%\analysis\__init__.py"
 )
 
 REM =====================================================
-REM CONFIG GENERAL (FEATURE-COMPLETE)
+REM CONFIG GENERAL
 REM =====================================================
 set "DATA=datasets\SOLUSDT\1m"
 set "BASE_CFG=configs\pipeline_research_backtest.json"
@@ -85,10 +81,7 @@ set "SEEDS_PER_CYCLE=3"
 set "SEED_STATE_FILE=results\autoloop_seed_base.txt"
 set "START_SEED=1000"
 set "CYCLE_DELAY_SEC=30"
-set "KEEP_RUNNING=0"
-set "SHORTLIST_N=10"
 set "SUPERVISOR_DELAY_SEC=10"
-set "ARCHIVE_LEGACY=1"
 
 REM =====================================================
 REM INIT DIRS
@@ -98,46 +91,34 @@ for %%D in ("%LOG_DIR%" "%ROBUST_OUT_DIR%" "%ROBUST_LEGACY_DIR%" "%PROMO_DIR%" "
 )
 
 REM =====================================================
-REM LOG BOOT (VISIBLE + FILE)
+REM LOG BOOT
 REM =====================================================
 echo =====================================================
 echo [BOOT] %DATE% %TIME%
 echo ROOT=%ROOT%
-echo PYTHONPATH=%PYTHONPATH%
 echo DATA=%DATA%
-echo BASE_CFG=%BASE_CFG%
 echo WINDOWS=%WINDOWS%
 echo =====================================================
 
 >>"%LOG_FILE%" echo =====================================================
 >>"%LOG_FILE%" echo [BOOT] %DATE% %TIME%
 >>"%LOG_FILE%" echo ROOT=%ROOT%
->>"%LOG_FILE%" echo PYTHONPATH=%PYTHONPATH%
 >>"%LOG_FILE%" echo DATA=%DATA%
->>"%LOG_FILE%" echo BASE_CFG=%BASE_CFG%
 >>"%LOG_FILE%" echo WINDOWS=%WINDOWS%
 >>"%LOG_FILE%" echo =====================================================
 
 REM =====================================================
-REM LOCK + STALE RECOVERY (NO SILENT EXIT)
+REM LOCK
 REM =====================================================
 if exist "%LOCK_FILE%" (
   powershell -NoProfile -Command ^
     "$p='%LOCK_FILE%';" ^
     "$age=(New-TimeSpan -Start (Get-Item $p).LastWriteTime -End (Get-Date)).TotalMinutes;" ^
     "if($age -gt %LOCK_STALE_MIN%){ Remove-Item -Force $p; exit 0 } else { exit 1 }"
-  if errorlevel 1 (
-    echo [LOCK] Active lock exists. Another instance running.
-    >>"%LOG_FILE%" echo [LOCK] Active lock exists.
-    goto END
-  ) else (
-    echo [LOCK] Stale lock removed.
-    >>"%LOG_FILE%" echo [LOCK] Stale lock removed.
-  )
+  if errorlevel 1 goto END
 )
 
 echo %DATE% %TIME%>"%LOCK_FILE%"
-
 if not exist "%SEED_STATE_FILE%" echo %START_SEED%>"%SEED_STATE_FILE%"
 
 REM =====================================================
@@ -147,13 +128,6 @@ REM =====================================================
 if exist "%STOP_FILE%" goto END
 
 call :ONE_CYCLE
-set "RC=%ERRORLEVEL%"
-
->>"%LOG_FILE%" echo [SUPERVISOR] rc=%RC% %DATE% %TIME%
-
-if "%RC%"=="10" goto END
-if "%RC%"=="20" goto END
-
 timeout /t %SUPERVISOR_DELAY_SEC% /nobreak >nul
 goto SUPERVISOR
 
@@ -161,9 +135,6 @@ REM =====================================================
 REM ONE CYCLE
 REM =====================================================
 :ONE_CYCLE
-echo %DATE% %TIME%>"%LOCK_FILE%"
-echo %DATE% %TIME%>"%HEARTBEAT_FILE%"
-
 set /p SEED_BASE=<"%SEED_STATE_FILE%"
 if "%SEED_BASE%"=="" set "SEED_BASE=%START_SEED%"
 
@@ -175,7 +146,6 @@ set "SEEDS=%S1% %S2% %S3%"
 set /a NEXT_SEED_BASE=SEED_BASE+%SEEDS_PER_CYCLE%
 echo %NEXT_SEED_BASE%>"%SEED_STATE_FILE%"
 
-echo ----------------------------------------------------
 echo [CYCLE] seed_base=%SEED_BASE% seeds=%SEEDS%
 >>"%LOG_FILE%" echo [CYCLE] seed_base=%SEED_BASE% seeds=%SEEDS%
 
@@ -188,7 +158,6 @@ for %%W in (%WINDOWS%) do (
   for %%S in (%SEEDS%) do (
     set "OUT=%ROBUST_OUT_DIR%\robust_%%W_seed%%S.json"
     if not exist "!OUT!" (
-      echo [A] RUN window=%%W seed=%%S
       %PYTHON% -m analysis.robust_optimizer ^
         --data "%DATA%" ^
         --base-config "%BASE_CFG%" ^
@@ -209,18 +178,40 @@ REM =========================
 %PYTHON% -m analysis.analysis_post_robust >>"%LOG_FILE%" 2>&1
 
 REM =========================
-REM PROMOTER A→B
+REM PROMOTER A → B  (FIX REAL)
 REM =========================
-%PYTHON% -m analysis.promoter_faseAto_B >>"%LOG_FILE%" 2>&1
+%PYTHON% -m analysis.promoter_faseA_to_B ^
+  --rules configs/promotion_rules_A.json >>"%LOG_FILE%" 2>&1
 
 REM =========================
-REM STAGE B
+REM STAGE B (CRITERIO DURO)
 REM =========================
-%PYTHON% -m analysis.stage_b_risk_calibration >>"%LOG_FILE%" 2>&1
+%PYTHON% -m analysis.stage_b_risk_calibration ^
+  --samples %B_SAMPLES% ^
+  --seed %B_SEED% ^
+  --min-trades-holdout 200 ^
+  --min-pf-holdout 1.25 ^
+  --min-winrate-holdout 0.38 ^
+  --max-dd-r-holdout 10 ^
+  --min-expectancy-holdout 0.02 ^
+  --exp-ratio-min 0.75 ^
+  --pf-ratio-min 0.9 ^
+  --dd-ratio-max 1.2 >>"%LOG_FILE%" 2>&1
 
 REM =========================
-REM STAGE C
+REM STAGE C (LETAL / REAL)
 REM =========================
+set PIPELINE_MIN_TRADES=400
+set PIPELINE_MIN_R_OBS=300
+set PIPELINE_TH_EXPECTANCY=0.08
+set PIPELINE_TH_SORTINO=1.7
+set PIPELINE_TH_PF=1.45
+set PIPELINE_TH_DD=-0.15
+set PIPELINE_TH_WINRATE=0.45
+set PIPELINE_TH_WORST5=-1.2
+set STAGEC_MIN_WINDOWS_OK=2
+set STAGEC_REQUIRE_GLOBAL_PASS=1
+
 %PYTHON% -m analysis.stage_c_pipeline_eval >>"%LOG_FILE%" 2>&1
 
 timeout /t %CYCLE_DELAY_SEC% /nobreak >nul
