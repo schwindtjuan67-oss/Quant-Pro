@@ -11,18 +11,6 @@ El objetivo no es “hacer un bot”, sino **producir artefactos auditables (JSO
 
 ## Estructura del repo
 
-├─ analysis/ # Research pipeline (A/B/C) + tooling de research
-├─ configs/ # Configs base + reglas de promoción A/B/C
-├─ bat/ # Orquestación Windows (autoloops, post, etc.)
-├─ results/ # Artefactos generados por el pipeline
-├─ Live/ # Shadow/Live engine (estrategia, risk, logger, ws)
-├─ dashboard_rt/ # Dashboards / realtime tools
-├─ web_dashboard/ # UI web (coming soon)
-├─ datasets/ # Datos históricos (no versionados en el repo debido al peso)
-├─ logs/ # Logs de ejecución
-└─ tools/ utils/ Validators/ # Utilidades auxiliares
-
-
 ---
 
 ## Big picture (Research → Artefactos → Shadow/Live)
