@@ -1,0 +1,96 @@
+# Quant-Pro
+
+Quant-Pro es un **ecosistema cuantitativo de trading algorítmico** con separación estricta entre:
+
+- **Research / Pipeline**: optimización, robustez, calibración de riesgo, evaluación multi-etapa (A→B→C)
+- **Shadow/Live**: motor estratégico + ejecución/simulación que consume parámetros validados
+
+El objetivo no es “hacer un bot”, sino **producir artefactos auditables (JSON/CSV)** que sobreviven filtros de robustez y luego se consumen en ejecución controlada.
+
+---
+
+## Estructura del repo
+
+├─ analysis/ # Research pipeline (A/B/C) + tooling de research
+├─ configs/ # Configs base + reglas de promoción A/B/C
+├─ bat/ # Orquestación Windows (autoloops, post, etc.)
+├─ results/ # Artefactos generados por el pipeline
+├─ Live/ # Shadow/Live engine (estrategia, risk, logger, ws)
+├─ dashboard_rt/ # Dashboards / realtime tools
+├─ web_dashboard/ # UI web (coming soon)
+├─ datasets/ # Datos históricos (no versionados en el repo debido al peso)
+├─ logs/ # Logs de ejecución
+└─ tools/ utils/ Validators/ # Utilidades auxiliares
+
+
+---
+
+## Big picture (Research → Artefactos → Shadow/Live)
+
+**Research / Pipeline**
+- `analysis/robust_optimizer.py` (Fase A) → genera resultados por ventana/seed
+- `analysis/analysis_post_robust.py` → agrega resultados y prepara summary/promoted
+- `analysis/promoter_faseA_to_B.py` → aplica reglas de promoción A→B
+- `analysis/stage_b_risk_calibration.py` (Fase B) → calibración risk / holdout
+- `analysis/stage_c_pipeline_eval.py` (Fase C) → evaluación final multi-ventana
+
+**Artefactos**
+- JSON con parámetros sobrevivientes (por fase) en `results/promotions/`
+- CSV reportes y trades por candidato para auditoría
+
+**Shadow/Live**
+- Motor en `Live/` (ej. `hybrid_scalper_pro.py`, `risk_manager.py`, `logger_pro.py`)
+- Integración de parámetros vía config/adapter/hotswap (ver docs)
+
+---
+
+## Quickstart
+
+### 1) Research Pipeline (Windows)
+Orquestador principal:
+- `bat/run_autoloop_A_B_C.bat`
+
+Este .bat dispara:
+- `python -m analysis.robust_optimizer` (A)
+- `python -m analysis.analysis_post_robust`
+- `python -m analysis.promoter_faseA_to_B --rules configs/promotion_rules_A.json`
+- `python -m analysis.stage_b_risk_calibration`
+- `python -m analysis.stage_c_pipeline_eval`
+
+> Recomendación: corré el pipeline por seeds y ventanas para medir estabilidad.
+
+### 2) Shadow/Live
+El motor vive en `Live/` y usualmente se arranca con sus runners (shadow/live según config).
+La ejecución consume:
+- estrategia (`Live/hybrid_scalper_pro.py`)
+- riesgo (`Live/risk_manager.py`)
+- logging (`Live/logger_pro.py`)
+- feed/ws (`Live/ws_futures_1m.py`, `Live/stream_klines.py`)
+- adaptadores/state (`Live/hybrid_scalper_pro_adapter.py`, `analysis/config_state_store.py`)
+
+---
+
+## Artefactos principales (outputs del pipeline)
+
+Carpetas (convención actual):
+- `results/robust/`  
+  - `robust_<WINDOW>_seed<SEED>.json` (salida por corrida A)
+- `results/promotions/`  
+  - `faseA_promoted.json`
+  - `faseB_promoted.json` + `faseB_report.csv`
+  - `faseC_promoted.json` + `faseC_report.csv`
+- `results/pipeline_stageC_trades/`  
+  - trades por candidato (auditoría)
+
+---
+
+## Convenciones de reproducibilidad
+- Seeds típicas: `1337`, `2024`, `777`
+- Ventanas definidas en `configs/windows.csv` / lógica del bat
+- Config base research: `configs/pipeline_research_backtest.json`
+- Reglas de promoción: `configs/promotion_rules_A.json`, `promotion_rules_B_.json`, `promotion_rules_C.json`
+
+---
+
+## Disclaimer
+Este repo es experimental. No constituye asesoramiento financiero. Operar derivados implica riesgo significativo.
