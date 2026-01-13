@@ -176,7 +176,6 @@ def max_drawdown(equity_after: List[float]) -> float:
     if not equity_after:
         return float("nan")
     eq = np.array(equity_after, dtype=float)
-    # drop nan
     eq = eq[np.isfinite(eq)]
     if eq.size == 0:
         return float("nan")
@@ -273,11 +272,7 @@ def passes_thresholds(m: EvalMetrics) -> Tuple[bool, str]:
 
 
 def load_exit_rows_with_context(csv_path: str) -> Tuple[Dict[str, Dict[str, Any]], List[Dict[str, Any]]]:
-    """Devuelve (entry_params_by_trade, exit_rows).
-
-    - entry_params_by_trade: trade_id -> params dict (de meta_json)
-    - exit_rows: lista de dict con floats ya parseados + window extraída
-    """
+    """Devuelve (entry_params_by_trade, exit_rows)."""
     entry_params: Dict[str, Dict[str, Any]] = {}
     exits: List[Dict[str, Any]] = []
 
@@ -291,10 +286,7 @@ def load_exit_rows_with_context(csv_path: str) -> Tuple[Dict[str, Dict[str, Any]
             tid = row.get("trade_id") or ""
             meta = _safe_json_loads(row.get("meta_json"))
 
-            # params
             params = meta.get("params") if isinstance(meta.get("params"), dict) else {}
-
-            # window (PIPELINE_WINDOW entra como context.window)
             ctx = meta.get("context") if isinstance(meta.get("context"), dict) else {}
             window = ctx.get("window") or ""
 
@@ -323,7 +315,6 @@ def load_exit_rows_with_context(csv_path: str) -> Tuple[Dict[str, Dict[str, Any]
                 "window": window,
             })
 
-    # fallback: llenar params faltantes desde ENTRY
     for r in exits:
         if (not isinstance(r.get("params"), dict)) or not r.get("params"):
             tid = r.get("trade_id")
@@ -331,7 +322,6 @@ def load_exit_rows_with_context(csv_path: str) -> Tuple[Dict[str, Dict[str, Any]
                 r["params"] = entry_params[tid]
 
     return entry_params, exits
-
 
 
 def run_candidate_backtests(
@@ -345,25 +335,21 @@ def run_candidate_backtests(
     trades_csv: str,
     run_id: str,
 ) -> None:
-    """Ejecuta backtests por window y escribe trades al CSV indicado."""
     os.makedirs(os.path.dirname(trades_csv) or ".", exist_ok=True)
     try:
         os.remove(trades_csv)
     except Exception:
         pass
 
-    # Asegurar que el logger use ESTE CSV
     os.environ["RUN_MODE"] = "PIPELINE"
     os.environ["PIPELINE_WRITE_CSV"] = "1"
     os.environ["PIPELINE_TRADES_PATH"] = trades_csv
     os.environ["PIPELINE_RUN_ID"] = run_id
 
-    # Si el módulo ya está importado, actualizar sus globals
     try:
         import Live.logger_pro as lp
         lp.RUN_MODE = "PIPELINE"
         lp.PIPELINE_WRITE_CSV = True
-        # Desactivar parquet para este proceso (CSV only)
         if os.getenv("PIPELINE_DISABLE_PARQUET", "1").lower() in ("1", "true", "yes"):
             def _flush_parquet_noop(self):
                 self._parquet_buffer.clear()
@@ -381,7 +367,7 @@ def run_candidate_backtests(
     for w in windows:
         date_from, date_to = window_to_dates(w)
         os.environ["PIPELINE_WINDOW"] = w
-        os.environ["PIPELINE_SEED"] = ""  # opcional
+        os.environ["PIPELINE_SEED"] = ""
 
         print("=" * 72)
         print(f"[STAGE C][RUN] window={w}  date_from={date_from} date_to={date_to}")
@@ -398,7 +384,6 @@ def run_candidate_backtests(
             print(f"[STAGE C][WARN] window={w} candles=0 -> skip")
             continue
 
-        # Ejecuta el runner real; el logger escribe trades al CSV.
         _real_backtest_fn(
             candles,
             candidate_params,
@@ -414,11 +399,8 @@ def evaluate_candidate(
     trades_csv: str,
     windows: List[str],
 ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
-    """Evalúa un CSV de trades y devuelve (global_eval, per_window_eval)."""
-
     _, exits = load_exit_rows_with_context(trades_csv)
 
-    # Agrupar por window
     by_win: Dict[str, List[Dict[str, Any]]] = {w: [] for w in windows}
     unknown: List[Dict[str, Any]] = []
 
@@ -457,7 +439,6 @@ def evaluate_candidate(
             },
         }
 
-    # Global: concat de ventanas conocidas + unknown (por si faltó context.window)
     all_rows: List[Dict[str, Any]] = []
     for w in windows:
         all_rows.extend(by_win.get(w) or [])
@@ -491,6 +472,9 @@ def evaluate_candidate(
 
 
 def main() -> int:
+    # ✅ PATCH REAL: declarar global ANTES de usar esas variables dentro de la función
+    global STAGEC_MIN_WINDOWS_OK, STAGEC_REQUIRE_GLOBAL_PASS
+
     ap = argparse.ArgumentParser("Stage C: pipeline eval (research-only)")
     ap.add_argument("--faseb", default="results/promotions/faseB_promoted.json", help="Input JSON (Fase B promoted)")
     ap.add_argument("--data", required=True, help="Dataset path (ej: datasets/SOLUSDT/1m)")
@@ -504,8 +488,6 @@ def main() -> int:
     ap.add_argument("--require-global-pass", type=int, default=1 if STAGEC_REQUIRE_GLOBAL_PASS else 0)
     args = ap.parse_args()
 
-    # actualizar gates por args
-    global STAGEC_MIN_WINDOWS_OK, STAGEC_REQUIRE_GLOBAL_PASS
     STAGEC_MIN_WINDOWS_OK = int(args.min_windows_ok)
     STAGEC_REQUIRE_GLOBAL_PASS = bool(int(args.require_global_pass))
 
@@ -545,7 +527,6 @@ def main() -> int:
         print(f"[CAND] params_key={_stable_params_key(params)[:140]}")
         print("#" * 72)
 
-        # 1) Run backtests (writes CSV)
         try:
             run_candidate_backtests(
                 candidate_params=params,
@@ -572,7 +553,6 @@ def main() -> int:
             })
             continue
 
-        # 2) Evaluate
         global_eval, per_win = evaluate_candidate(trades_csv=trades_csv, windows=windows)
 
         passed_windows = int(global_eval.get("passed_windows", 0))
@@ -611,7 +591,6 @@ def main() -> int:
             "trades_csv": trades_csv,
         }
 
-        # Report row (flatten básico)
         gm = global_eval.get("global_metrics") or {}
         report_rows.append({
             "idx": i,
@@ -632,7 +611,6 @@ def main() -> int:
             "ts": entry["evaluated_at_utc"],
         })
 
-        # Agregar algunas columnas por window
         for w in windows:
             wobj = per_win.get(w) or {}
             report_rows[-1][f"{w}_pass"] = wobj.get("passed")
@@ -647,10 +625,8 @@ def main() -> int:
 
         print(f"[CAND] pass_C={pass_c} passed_windows={passed_windows}/{len(windows)} global_pass={global_pass} reason={reason_c}")
 
-    # Sort promoted
     def _rank_key(x: Dict[str, Any]) -> float:
         gm = (x.get("global") or {}).get("global_metrics") or {}
-        # rank simple: equity proxy ~ expectancy*trades
         try:
             return float(gm.get("expectancy_r", 0.0)) * float(gm.get("trades", 0.0))
         except Exception:
@@ -660,7 +636,6 @@ def main() -> int:
 
     _write_json(args.out, promoted_c)
 
-    # CSV report: headers union
     headers: List[str] = []
     for r in report_rows:
         for k in r.keys():
@@ -684,3 +659,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
