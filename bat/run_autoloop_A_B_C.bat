@@ -180,7 +180,7 @@ REM =========================
 REM =========================
 REM PROMOTER A → B  (FIX REAL)
 REM =========================
-%PYTHON% -m analysis.promoter_faseA_to_B ^
+
   --rules configs/promotion_rules_A.json >>"%LOG_FILE%" 2>&1
 
 REM =========================

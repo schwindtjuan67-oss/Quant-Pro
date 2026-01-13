@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
-# analysis_post_robust.py
+# analysis/analysis_post_robust.py
 
 from __future__ import annotations
-
 
 import os, sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -10,10 +9,9 @@ if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
 import json
-import os
 import glob
 import statistics
-from typing import Dict, List, Any, Tuple
+from typing import Dict, List, Any, Tuple, Optional
 
 from analysis.opt_space import phase_keys
 
@@ -24,8 +22,10 @@ from analysis.opt_space import phase_keys
 ROBUST_DIR = "results/robust"
 OUT_DIR = "results/promotions"
 
-SEEDS = {1337, 2024, 777}
-MIN_SEED_PASSES = 2          # 2 de 3 seeds
+# Si SEEDS=None => acepta cualquier seed (RECOMENDADO para autoloop incremental)
+SEEDS: Optional[set] = None
+
+MIN_SEED_PASSES = 2          # 2 de N seeds (por ventana)
 MIN_WINDOWS_PASSES = 2       # 2 de N ventanas
 
 # Hard gates (FASE A)
@@ -45,25 +45,24 @@ TOP_K_PROMOTED = 30
 # ===============================
 
 def _passes_hard_gates(r: Dict[str, Any]) -> bool:
-    agg = r.get("agg", {})
-    folds = r.get("folds", [])
+    agg = r.get("agg", {}) or {}
+    folds = r.get("folds", []) or []
 
-    trades = agg.get("trades") or max(
-        (f["metrics"].get("trades", 0) for f in folds),
-        default=0
-    )
+    trades = agg.get("trades")
+    if trades is None:
+        trades = max((f.get("metrics", {}).get("trades", 0) for f in folds), default=0)
 
-    pf = agg.get("profit_factor", 0.0)
-    winrate = agg.get("winrate", 0.0)
-    max_dd = abs(agg.get("max_drawdown_r", 999))
-    score_worst = agg.get("score_worst", -999)
+    pf = float(agg.get("profit_factor", 0.0) or 0.0)
+    winrate = float(agg.get("winrate", 0.0) or 0.0)
+    max_dd = abs(float(agg.get("max_drawdown_r", 999) or 999))
+    score_worst = float(agg.get("score_worst", -999) or -999)
 
     return (
-        trades >= GATES["min_trades"] and
-        pf >= GATES["min_pf"] and
-        winrate >= GATES["min_winrate"] and
-        max_dd <= GATES["max_dd_r"] and
-        score_worst > GATES["min_score_worst"]
+        int(trades) >= int(GATES["min_trades"]) and
+        pf >= float(GATES["min_pf"]) and
+        winrate >= float(GATES["min_winrate"]) and
+        max_dd <= float(GATES["max_dd_r"]) and
+        score_worst > float(GATES["min_score_worst"])
     )
 
 
@@ -104,63 +103,77 @@ def main() -> None:
 
     frozen_keys_a = phase_keys("A")
     skipped_non_a = 0
+    skipped_seed = 0
 
     for fp in files:
         window, seed = parse_filename(fp)
-        if seed not in SEEDS:
+
+        if SEEDS is not None and seed not in SEEDS:
+            skipped_seed += 1
             continue
 
         with open(fp, "r", encoding="utf-8") as f:
             data = json.load(f)
 
+        if not isinstance(data, list):
+            continue
+
         for r in data:
+            if not isinstance(r, dict):
+                continue
+
             # No mezclar resultados generados con otro phase-space
             meta = r.get("meta", {}) or {}
             ph = str(meta.get("pipeline_phase", "") or "").strip().upper()
+
             # Sellado estricto: fase A SOLO acepta resultados generados con PIPELINE_PHASE=A
             if ph != "A":
                 skipped_non_a += 1
                 continue
-            key = json.dumps(r["params"], sort_keys=True)
+
+            params = r.get("params") or {}
+            if not isinstance(params, dict) or not params:
+                continue
+
+            key = json.dumps(params, sort_keys=True)
             bucket.setdefault(window, {}).setdefault(key, {})[seed] = r
 
     promoted: Dict[str, Dict[str, Any]] = {}
 
     for window, params_map in bucket.items():
         for key, seed_map in params_map.items():
-            passed_seeds = []
-            robust_scores = []
+            passed_seeds: List[int] = []
+            robust_scores: List[float] = []
 
             for seed, rec in seed_map.items():
                 if _passes_hard_gates(rec):
-                    passed_seeds.append(seed)
+                    passed_seeds.append(int(seed))
                     agg = rec.get("agg", {}) or {}
-                    robust_scores.append(float(agg.get("robust_score", rec.get("robust_score", -1e9))))
+                    robust_scores.append(float(agg.get("robust_score", rec.get("robust_score", -1e9)) or -1e9))
 
-            if len(passed_seeds) >= MIN_SEED_PASSES:
+            # Gate por seeds (2 de N disponibles para ese param en esa window)
+            if len(passed_seeds) >= int(MIN_SEED_PASSES):
                 promoted.setdefault(key, {
                     "params": json.loads(key),
                     "windows": {},
                     "scores": [],
-                    # Congelado explícito para Stage B (calibración de risk)
                     "phaseA_frozen_keys": frozen_keys_a,
                     "phaseA_phase": "A",
                 })
                 promoted[key]["windows"][window] = {
-                    "seeds": passed_seeds,
+                    "seeds": sorted(set(passed_seeds)),
                     "scores": robust_scores,
                 }
                 promoted[key]["scores"].extend(robust_scores)
 
-    # persistencia temporal
-    final = []
+    final: List[Dict[str, Any]] = []
     for p in promoted.values():
-        if len(p["windows"]) >= MIN_WINDOWS_PASSES:
-            p["promotion_score"] = promotion_score(p["scores"])
+        if len(p.get("windows", {})) >= int(MIN_WINDOWS_PASSES):
+            p["promotion_score"] = promotion_score(p.get("scores", []))
             final.append(p)
 
-    final.sort(key=lambda x: x["promotion_score"], reverse=True)
-    final = final[:TOP_K_PROMOTED]
+    final.sort(key=lambda x: float(x.get("promotion_score", -1e9)), reverse=True)
+    final = final[: int(TOP_K_PROMOTED)]
 
     out_path = os.path.join(OUT_DIR, "faseA_promoted.json")
     with open(out_path, "w", encoding="utf-8") as f:
@@ -169,6 +182,8 @@ def main() -> None:
     print("=========================================")
     print(f"[POST] Promoted candidates: {len(final)}")
     print(f"[POST] Saved -> {out_path}")
+    if skipped_seed:
+        print(f"[POST][INFO] Skipped {skipped_seed} files due to SEEDS filter")
     if skipped_non_a:
         print(f"[POST][WARN] Skipped {skipped_non_a} records not generated with PIPELINE_PHASE=A")
     print("=========================================")
@@ -181,4 +196,5 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
 
