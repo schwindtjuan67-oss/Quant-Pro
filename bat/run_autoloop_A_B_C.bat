@@ -2,7 +2,7 @@
 setlocal ENABLEDELAYEDEXPANSION
 
 REM =====================================================
-REM HARD FAIL SAFE – detectar contexto inválido
+REM HARD FAIL SAFE
 REM =====================================================
 set "SCRIPT_DIR=%~dp0"
 if "%SCRIPT_DIR%"=="" (
@@ -38,14 +38,11 @@ set "DATA=datasets\SOLUSDT\1m"
 set "BASE_CFG=configs\pipeline_research_backtest.json"
 
 set "ROBUST_OUT_DIR=results\robust"
-set "ROBUST_LEGACY_DIR=results\robust_legacy"
 set "PROMO_DIR=results\promotions"
 set "STAGEC_TRADES_DIR=results\pipeline_stageC_trades"
-set "FROZEN_DIR=results\frozen"
 set "LOG_DIR=logs"
 set "LOG_FILE=%LOG_DIR%\autoloop_ABC.log"
 
-set "HEARTBEAT_FILE=results\autoloop_heartbeat.txt"
 set "LOCK_FILE=results\AUTOLOOP.lock"
 set "LOCK_STALE_MIN=120"
 set "STOP_FILE=results\STOP_AUTOLOOP.txt"
@@ -86,7 +83,7 @@ set "SUPERVISOR_DELAY_SEC=10"
 REM =====================================================
 REM INIT DIRS
 REM =====================================================
-for %%D in ("%LOG_DIR%" "%ROBUST_OUT_DIR%" "%ROBUST_LEGACY_DIR%" "%PROMO_DIR%" "%STAGEC_TRADES_DIR%" "%FROZEN_DIR%") do (
+for %%D in ("%LOG_DIR%" "%ROBUST_OUT_DIR%" "%PROMO_DIR%" "%STAGEC_TRADES_DIR%") do (
   if not exist %%D mkdir %%D
 )
 
@@ -150,7 +147,7 @@ echo [CYCLE] seed_base=%SEED_BASE% seeds=%SEEDS%
 >>"%LOG_FILE%" echo [CYCLE] seed_base=%SEED_BASE% seeds=%SEEDS%
 
 REM =========================
-REM FASE A
+REM FASE A — ROBUST
 REM =========================
 set "PIPELINE_PHASE=A"
 
@@ -173,33 +170,24 @@ for %%W in (%WINDOWS%) do (
 )
 
 REM =========================
-REM POST A
+REM POST A — ÚNICO PROMOTOR A→B
 REM =========================
 %PYTHON% -m analysis.analysis_post_robust >>"%LOG_FILE%" 2>&1
 
 REM =========================
-REM PROMOTER A → B  (FIX REAL)
-REM =========================
-
-  --rules configs/promotion_rules_A.json >>"%LOG_FILE%" 2>&1
-
-REM =========================
-REM STAGE B (CRITERIO DURO)
+REM STAGE B — RISK CALIBRATION
 REM =========================
 %PYTHON% -m analysis.stage_b_risk_calibration ^
+  --data "%DATA%" ^
+  --base-config "%BASE_CFG%" ^
+  --fasea "%PROMO_DIR%\faseA_promoted.json" ^
+  --out "%PROMO_DIR%\faseB_promoted.json" ^
+  --report-csv "%PROMO_DIR%\faseB_report.csv" ^
   --samples %B_SAMPLES% ^
-  --seed %B_SEED% ^
-  --min-trades-holdout 200 ^
-  --min-pf-holdout 1.25 ^
-  --min-winrate-holdout 0.38 ^
-  --max-dd-r-holdout 10 ^
-  --min-expectancy-holdout 0.02 ^
-  --exp-ratio-min 0.75 ^
-  --pf-ratio-min 0.9 ^
-  --dd-ratio-max 1.2 >>"%LOG_FILE%" 2>&1
+  --seed %B_SEED% >>"%LOG_FILE%" 2>&1
 
 REM =========================
-REM STAGE C (LETAL / REAL)
+REM STAGE C — SUPERVIVENCIA REAL
 REM =========================
 set PIPELINE_MIN_TRADES=400
 set PIPELINE_MIN_R_OBS=300
@@ -212,7 +200,13 @@ set PIPELINE_TH_WORST5=-1.2
 set STAGEC_MIN_WINDOWS_OK=2
 set STAGEC_REQUIRE_GLOBAL_PASS=1
 
-%PYTHON% -m analysis.stage_c_pipeline_eval >>"%LOG_FILE%" 2>&1
+%PYTHON% -m analysis.stage_c_pipeline_eval ^
+  --faseb "%PROMO_DIR%\faseB_promoted.json" ^
+  --data "%DATA%" ^
+  --base-config "%BASE_CFG%" ^
+  --trades-dir "%STAGEC_TRADES_DIR%" ^
+  --interval %C_INTERVAL% ^
+  --warmup %C_WARMUP% >>"%LOG_FILE%" 2>&1
 
 timeout /t %CYCLE_DELAY_SEC% /nobreak >nul
 exit /b 0
