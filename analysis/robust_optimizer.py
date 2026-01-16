@@ -751,6 +751,45 @@ def run_robust_search(
     interval = "1m"
     warmup = 500
 
+    base_cfg_path = os.getenv("ROBUST_BASE_CONFIG", "").strip()
+    if base_cfg_path:
+        try:
+            with open(base_cfg_path, "r", encoding="utf-8") as f:
+                base_cfg = json.load(f)
+        except Exception as e:
+            print(f"[ROBUST][PAR][WARN] failed to load ROBUST_BASE_CONFIG: {type(e).__name__}")
+            base_cfg = None
+    symbol_env = os.getenv("ROBUST_SYMBOL", "").strip()
+    symbol = symbol_env or None
+    interval_env = os.getenv("ROBUST_INTERVAL", "").strip()
+    if interval_env:
+        interval = interval_env
+    warmup_env = os.getenv("ROBUST_WARMUP", "").strip()
+    if warmup_env:
+        try:
+            warmup = int(warmup_env)
+        except Exception:
+            warmup = 500
+
+    if not use_dummy and base_cfg is None:
+        print("[ROBUST][PAR][WARN] missing base_cfg; falling back to sequential")
+        results: List[EvalResult] = []
+        for params in params_list:
+            er = evaluate_params_walk_forward(
+                data=data,
+                params=params,
+                backtest_fn=backtest_fn,
+                splits=splits,
+                gates=gates,
+            )
+            results.append(er)
+
+        results.sort(
+            key=lambda r: (r.robust_score, r.agg.get("score_worst", -1e9), -r.agg.get("score_std", 1e9)),
+            reverse=True,
+        )
+        return results[:top_k]
+
     # --- safety defaults ---
     param_timeout = float(os.getenv("ROBUST_PARAM_TIMEOUT", "0"))  # 0 = sin timeout
     batch_size = int(os.getenv("ROBUST_BATCH_SIZE", "1"))          # 1 = modo actual
@@ -777,10 +816,10 @@ def run_robust_search(
         initializer=_worker_init,
         initargs=(
             data,         # se picklea 1 vez por worker
-            _WORKER_BASE_CFG,  # si no lo seteaste, queda None (main lo setea en el wrapper)
-            _WORKER_SYMBOL,
-            _WORKER_INTERVAL,
-            _WORKER_WARMUP,
+            base_cfg,
+            symbol,
+            interval,
+            warmup,
             gates,
             splits,
             use_dummy,
@@ -1205,7 +1244,6 @@ def main():
 
 if __name__ == "__main__":
     main()
-
 
 
 
