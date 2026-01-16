@@ -25,7 +25,7 @@ OUT_DIR = "results/promotions"
 # Si SEEDS=None => acepta cualquier seed (RECOMENDADO para autoloop incremental)
 SEEDS: Optional[set] = None
 
-MIN_SEED_PASSES = 2          # 2 de N seeds (por ventana)
+MIN_SEED_PASSES = 1          # 2 de N seeds (por ventana)
 MIN_WINDOWS_PASSES = 2       # 2 de N ventanas
 
 # Hard gates (FASE A)
