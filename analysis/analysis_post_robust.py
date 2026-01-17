@@ -263,21 +263,22 @@ def main() -> None:
     with open(out_json, "w", encoding="utf-8") as f:
         json.dump(final, f, indent=2, ensure_ascii=False)
 
-    if rejected_rows:
-        with open(WHY_REJECTED_CSV, "w", newline="", encoding="utf-8") as f:
-            writer = csv.writer(f)
-            writer.writerow([
-                "window",
-                "seed",
-                "params_key",
-                "failed_rules",
-                "trades_min",
-                "pf_mean",
-                "winrate_mean",
-                "dd_max",
-                "expectancy_mean",
-                "robust_score_mean",
-            ])
+    # 👉 FIX CRÍTICO: writer SIEMPRE dentro del with
+    with open(WHY_REJECTED_CSV, "w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow([
+            "window",
+            "seed",
+            "params_key",
+            "failed_rules",
+            "trades",
+            "profit_factor",
+            "winrate",
+            "max_drawdown_r",
+            "expectancy",
+            "robust_score",
+        ])
+        if rejected_rows:
             writer.writerows(rejected_rows)
 
     # ---------------------------
@@ -287,8 +288,7 @@ def main() -> None:
     print("=========================================")
     print(f"[POST] Phase {PHASE} promoted: {len(final)}")
     print(f"[POST] Saved -> {out_json}")
-    if rejected_rows:
-        print(f"[POST] Rejection audit -> {WHY_REJECTED_CSV}")
+    print(f"[POST] Rejection audit -> {WHY_REJECTED_CSV}")
     if skipped_seed:
         print(f"[POST][INFO] Skipped {skipped_seed} files by SEEDS")
     if skipped_phase:
