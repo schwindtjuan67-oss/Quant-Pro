@@ -1,23 +1,35 @@
 {
-  "phase": "B to C",
+  "phase": "B",
 
-  "top_n": 20,
+  "scope": "aggregated",
 
-  "min_runs": 2,
-  "min_unique_seeds": 2,
-  "min_unique_windows": 2,
+  "filters": {
+    "trades_total": {
+      "mean_min": 80,
+      "min": 40
+    },
+    "profit_factor": {
+      "mean_min": 1.05
+    },
+    "winrate": {
+      "mean_min": 0.33
+    },
+    "max_drawdown_r": {
+      "max": 30.0
+    },
+    "expectancy": {
+      "mean_min": 0.01
+    },
+    "robust_score": {
+      "mean_min": 0.02
+    }
+  },
 
-  "min_pass_rate": 0.40,
-
-  "min_robust_mean": 0.02,
-  "min_expectancy_mean": 0.01,
-
-  "min_trades_total_mean": 80,
-  "min_trades_total_min": 40,
-
-  "max_dd_max": 30.0,
-
-  "min_pf_mean": 1.05,
-  "min_winrate_mean": 0.33
+  "promotion": {
+    "min_unique_seeds": 2,
+    "min_unique_windows": 2,
+    "min_pass_rate": 0.40,
+    "top_k": 20
+  }
 }
 
