@@ -293,7 +293,8 @@ class HybridScalperPRO:
 
         self.EMA_FAST = ema_fast
         self.EMA_SLOW = ema_slow
-        self.ATR_N = atr_n
+        # Guard defensivo: evitar ventanas inválidas (0 o negativas)
+        self.ATR_N = max(1, int(atr_n))
         self.ATR_STOP_MULT = atr_stop_mult
         self.ATR_TRAIL_MULT = atr_trail_mult
         self.VOL_TARGET = vol_target
@@ -341,7 +342,21 @@ class HybridScalperPRO:
         # - used for ATR/VWAP/rolling means
         # - keeps working even without GPU (fallback uses numpy)
         # ============================================================
-        self.gpu = GPUFeatureEngine(max_len=2000, atr_n=int(self.ATR_N), max_recent=300)
+        # ------------------------------------------------------------
+        # GPUFeatureEngine: compat con firmas distintas (infra vs fallback)
+        # ------------------------------------------------------------
+        self.VWAP_WINDOW = max(1, int(getattr(self, "VWAP_WINDOW", 96)))
+        try:
+            # firma fallback (max_recent)
+            self.gpu = GPUFeatureEngine(max_len=2000, atr_n=int(self.ATR_N), max_recent=300)
+        except TypeError:
+            # firma infra.gpu_features (vwap_window/vol_window)
+            self.gpu = GPUFeatureEngine(
+                max_len=2000,
+                atr_n=int(self.ATR_N),
+                vwap_window=int(self.VWAP_WINDOW),
+                vol_window=max(1, int(getattr(self, "VOL_WINDOW", 30))),
+            )
 
         # -------- HOURLY FLAGS state
         self._hourly_flags_last_load_ts: float = 0.0
@@ -1573,6 +1588,5 @@ class HybridScalperPRO:
             return
 
         return
-
 
 

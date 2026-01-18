@@ -613,7 +613,7 @@ def _worker_eval_one(params: Dict[str, Any]) -> Dict[str, Any]:
         return {
             "params": params,
             "passed": False,
-            "fail_reason": f"EXCEPTION: {type(e).__name__}",
+            "fail_reason": f"EXCEPTION:{type(e).__name__}: {e}",
             "agg": {},
             "robust_score": -1e9,
             "folds": [],
@@ -656,7 +656,7 @@ def _worker_eval_batch(params_batch: List[Dict[str, Any]]) -> List[Dict[str, Any
             out.append({
                 "params": p,
                 "passed": False,
-                "fail_reason": f"EXCEPTION:{type(e).__name__}",
+                "fail_reason": f"EXCEPTION:{type(e).__name__}: {e}",
                 "agg": {},
                 "robust_score": -1e9,
                 "folds": [],
@@ -849,7 +849,7 @@ def run_robust_search(
                         results_payloads.append({
                             "params": p,
                             "passed": False,
-                            "fail_reason": f"EXCEPTION:{type(e).__name__}",
+                            "fail_reason": f"EXCEPTION:{type(e).__name__}: {e}",
                             "agg": {},
                             "robust_score": -1e9,
                             "folds": [],
@@ -859,7 +859,7 @@ def run_robust_search(
                     results_payloads.append({
                         "params": {},
                         "passed": False,
-                        "fail_reason": f"EXCEPTION:{type(e).__name__}",
+                        "fail_reason": f"EXCEPTION:{type(e).__name__}: {e}",
                         "agg": {},
                         "robust_score": -1e9,
                         "folds": [],
@@ -1205,7 +1205,6 @@ def main():
 
 if __name__ == "__main__":
     main()
-
 
 
 
