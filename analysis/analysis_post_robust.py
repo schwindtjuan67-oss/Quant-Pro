@@ -65,10 +65,6 @@ def normalize_metrics(rec: Dict[str, Any]) -> Dict[str, float]:
     Todas las métricas de decisión salen de acá.
     """
     folds = rec.get("folds", []) or []
-    has_fold_metrics = any(
-        isinstance(f, dict) and isinstance(f.get("metrics"), dict)
-        for f in folds
-    )
 
     def _vals(key: str, default: float = 0.0) -> List[float]:
         return [
@@ -77,33 +73,12 @@ def normalize_metrics(rec: Dict[str, Any]) -> Dict[str, float]:
             if isinstance(f, dict)
         ]
 
-    if has_fold_metrics:
-        trades = _vals("trades", 0)
-        pf = _vals("profit_factor", 0.0)
-        wr = _vals("winrate", 0.0)
-        dd = [abs(v) for v in _vals("max_drawdown_r", 999)]
-        exp = _vals("expectancy", 0.0)
-        rs = _vals("robust_score", -1e9)
-    else:
-        agg = rec.get("agg", {}) or {}
-
-        def _agg_float(key: str, default: float) -> float:
-            val = agg.get(key, default)
-            return float(val) if val is not None else float(default)
-
-        trades_val = _agg_float("trades", 0)
-        pf_val = _agg_float("profit_factor", 0.0)
-        wr_val = _agg_float("winrate", 0.0)
-        dd_val = abs(_agg_float("max_drawdown_r", 999))
-        exp_val = _agg_float("expectancy", 0.0)
-        rs_val = _agg_float("robust_score", -1e9)
-
-        trades = [trades_val]
-        pf = [pf_val]
-        wr = [wr_val]
-        dd = [dd_val]
-        exp = [exp_val]
-        rs = [rs_val]
+    trades = _vals("trades", 0)
+    pf = _vals("profit_factor", 0.0)
+    wr = _vals("winrate", 0.0)
+    dd = [abs(v) for v in _vals("max_drawdown_r", 999)]
+    exp = _vals("expectancy", 0.0)
+    rs = _vals("robust_score", -1e9)
 
     return {
         "trades_min": min(trades) if trades else 0,
@@ -133,9 +108,6 @@ def _passes_filters_verbose(
     reasons: List[str] = []
 
     for metric, cfg in FILTERS.items():
-        if PHASE == "A" and metric not in {"trades_min", "dd_max"}:
-            continue
-
         val = metrics.get(metric)
         if val is None:
             reasons.append(f"{metric}:missing")
@@ -151,16 +123,11 @@ def _passes_filters_verbose(
 def promotion_score(scores: List[float]) -> float:
     if not scores:
         return -1e9
-    if PHASE == "A":
-        return statistics.median(scores)
     return (
         statistics.median(scores)
         - 0.50 * statistics.pstdev(scores)
         + 0.25 * min(scores)
     )
-
-def phase_a_score(metrics: Dict[str, float]) -> float:
-    return metrics["trades_mean"] - 0.01 * metrics["dd_max"]
 
 def parse_filename(path: str) -> Tuple[str, int]:
     """
@@ -239,39 +206,11 @@ def main() -> None:
 
             for seed, rec in seed_map.items():
                 metrics = normalize_metrics(rec)
-                is_degenerate = (
-                    metrics["trades_min"] == 0
-                    and metrics["pf_mean"] == 0.0
-                    and metrics["winrate_mean"] == 0.0
-                    and metrics["dd_max"] == 999
-                    and metrics["expectancy_mean"] == 0.0
-                    and metrics["robust_score_mean"] <= -1e9
-                )
-                if is_degenerate:
-                    rejected_rows.append([
-                        window,
-                        seed,
-                        key,
-                        "metrics_degenerate",
-                        metrics["trades_min"],
-                        metrics["pf_mean"],
-                        metrics["winrate_mean"],
-                        metrics["dd_max"],
-                        metrics["expectancy_mean"],
-                        metrics["robust_score_mean"],
-                    ])
-                    continue
-
                 ok, reasons = _passes_filters_verbose(metrics)
 
                 if ok:
                     passed_seeds.append(seed)
-                    score = (
-                        phase_a_score(metrics)
-                        if PHASE == "A"
-                        else metrics["robust_score_mean"]
-                    )
-                    scores.append(score)
+                    scores.append(metrics["robust_score_mean"])
                 else:
                     rejected_rows.append([
                         window,
@@ -365,5 +304,9 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+
+
+
 
 
