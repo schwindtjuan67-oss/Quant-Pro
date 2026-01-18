@@ -24,6 +24,7 @@ PIPELINE_PARQUET_DIR = os.getenv(
 )
 PIPELINE_PARQUET_FLUSH = int(os.getenv("PIPELINE_PARQUET_FLUSH", "500"))
 PIPELINE_WRITE_CSV = os.getenv("PIPELINE_WRITE_CSV", "0").lower() in ("1", "true", "yes")
+PIPELINE_DISABLE_TRADE_LOG = os.getenv("PIPELINE_DISABLE_TRADE_LOG", "0").lower() in ("1", "true", "yes")
 
 # ---- TZ: Argentina
 def _get_local_tz():
@@ -122,6 +123,7 @@ class TradeLogger:
         self.symbol = symbol
         self.run_mode = RUN_MODE
         self._pipeline_mode = (self.run_mode == "PIPELINE")
+        self._trade_log_disabled = self._pipeline_mode and PIPELINE_DISABLE_TRADE_LOG
         self._pending_meta_json: str = ""
         self._parquet_buffer: List[dict] = []
 
@@ -135,6 +137,11 @@ class TradeLogger:
         ]
 
         self.active_trade = None
+
+        if self._trade_log_disabled:
+            self.file_pipeline_trades = ""
+            self.file_trades_v4 = ""
+            return
 
         if self._pipeline_mode:
             os.makedirs("results", exist_ok=True)
@@ -161,6 +168,8 @@ class TradeLogger:
     # -------------------------
     def close(self) -> None:
         """Flush final (seguro) para PIPELINE."""
+        if self._trade_log_disabled:
+            return
         if self._pipeline_mode:
             try:
                 self._flush_parquet()
@@ -172,6 +181,8 @@ class TradeLogger:
     # Parquet flush (PARTITIONED)
     # -------------------------
     def _flush_parquet(self):
+        if self._trade_log_disabled:
+            return
         if not self._parquet_buffer:
             return
 
@@ -221,6 +232,8 @@ class TradeLogger:
         }
 
     def _write_row(self, row_v4: dict):
+        if self._trade_log_disabled:
+            return
         if self._pipeline_mode:
             self._parquet_buffer.append(row_v4)
             if len(self._parquet_buffer) >= PIPELINE_PARQUET_FLUSH:
@@ -237,6 +250,8 @@ class TradeLogger:
     # Bars (solo MFE/MAE)
     # -------------------------
     def log_bar(self, **k):
+        if self._trade_log_disabled:
+            return
         candle = k.get("candle", k)
         ts_ms = _safe_int(candle.get("timestamp"), default=_ts_ms_now())
         close = _safe_float(candle.get("close"))
@@ -254,6 +269,8 @@ class TradeLogger:
     # Trades
     # -------------------------
     def log_trade(self, **k):
+        if self._trade_log_disabled:
+            return
         trade_type = k.get("type") or k.get("type_")
         if not trade_type:
             return
@@ -400,7 +417,6 @@ class TradeLogger:
             self.log_bar(**k)
         else:
             self.log_trade(**k)
-
 
 
 
