@@ -18,6 +18,7 @@ import csv
 import json
 import pickle
 import multiprocessing as mp
+import tempfile
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional, Tuple
@@ -49,6 +50,8 @@ class EvalResult:
     robust_score: float
     passed: bool
     fail_reason: str = ""
+    exception: str = ""
+    traceback: str = ""
 
 
 # ============================================================
@@ -540,49 +543,63 @@ def _evaluate_params_on_cached_test_slices(
         # fallback a la vieja vía (no debería si init pudo cachear)
         return _worker_eval_one(params)
 
-    fold_results: List[FoldResult] = []
-    passed = True
-    fail_reason = ""
+    try:
+        fold_results: List[FoldResult] = []
+        passed = True
+        fail_reason = ""
 
-    for i, test_data in enumerate(_WORKER_TEST_SLICES):
-        trades_test = _worker_backtest_fn(test_data, params)
+        for i, test_data in enumerate(_WORKER_TEST_SLICES):
+            trades_test = _worker_backtest_fn(test_data, params)
 
-        m = compute_metrics_from_trades(trades_test)
-        ok, reason = _passes_gates(m, _WORKER_GATES)
-        s = compute_score(m)
+            m = compute_metrics_from_trades(trades_test)
+            ok, reason = _passes_gates(m, _WORKER_GATES)
+            s = compute_score(m)
 
-        fold_results.append(FoldResult(fold_id=i, metrics=m, score=s))
-        if not ok:
-            passed = False
-            fail_reason = f"fold {i}: {reason}"
+            fold_results.append(FoldResult(fold_id=i, metrics=m, score=s))
+            if not ok:
+                passed = False
+                fail_reason = f"fold {i}: {reason}"
 
-    fold_scores = [fr.score for fr in fold_results]
-    robust = aggregate_fold_scores(
-        fold_scores,
-        lam_std=_WORKER_GATES.get("lam_std", 0.75),
-        beta_worst=_WORKER_GATES.get("beta_worst", 0.35),
-    )
+        fold_scores = [fr.score for fr in fold_results]
+        robust = aggregate_fold_scores(
+            fold_scores,
+            lam_std=_WORKER_GATES.get("lam_std", 0.75),
+            beta_worst=_WORKER_GATES.get("beta_worst", 0.35),
+        )
 
-    agg = {
-        "folds": len(fold_results),
-        "score_mean": float(np.mean(fold_scores)) if fold_scores else -1e9,
-        "score_std": float(np.std(fold_scores, ddof=1)) if len(fold_scores) > 1 else 0.0,
-        "score_worst": float(np.min(fold_scores)) if fold_scores else -1e9,
-        "robust_score": float(robust),
-    }
+        agg = {
+            "folds": len(fold_results),
+            "score_mean": float(np.mean(fold_scores)) if fold_scores else -1e9,
+            "score_std": float(np.std(fold_scores, ddof=1)) if len(fold_scores) > 1 else 0.0,
+            "score_worst": float(np.min(fold_scores)) if fold_scores else -1e9,
+            "robust_score": float(robust),
+        }
 
-    payload = {
-        "params": params,
-        "passed": passed,
-        "fail_reason": fail_reason,
-        "agg": agg,
-        "robust_score": float(robust),
-        "folds": [
-            {"fold_id": fr.fold_id, "score": fr.score, "metrics": fr.metrics}
-            for fr in fold_results
-        ],
-    }
-    return payload
+        payload = {
+            "params": params,
+            "passed": passed,
+            "fail_reason": fail_reason,
+            "agg": agg,
+            "robust_score": float(robust),
+            "folds": [
+                {"fold_id": fr.fold_id, "score": fr.score, "metrics": fr.metrics}
+                for fr in fold_results
+            ],
+        }
+        return payload
+    except Exception as e:
+        import traceback
+        tb = traceback.format_exc()
+        return {
+            "params": params,
+            "passed": False,
+            "fail_reason": f"EXCEPTION:{type(e).__name__}: {e}",
+            "exception": str(e),
+            "traceback": tb,
+            "agg": {},
+            "robust_score": -1e9,
+            "folds": [],
+        }
 
 
 def _worker_eval_one(params: Dict[str, Any]) -> Dict[str, Any]:
@@ -736,14 +753,28 @@ def run_robust_search(
     if workers <= 1:
         results: List[EvalResult] = []
         for params in params_list:
-            er = evaluate_params_walk_forward(
-                data=data,
-                params=params,
-                backtest_fn=backtest_fn,
-                splits=splits,
-                gates=gates,
-            )
-            results.append(er)
+            try:
+                er = evaluate_params_walk_forward(
+                    data=data,
+                    params=params,
+                    backtest_fn=backtest_fn,
+                    splits=splits,
+                    gates=gates,
+                )
+                results.append(er)
+            except Exception as e:
+                import traceback
+                tb = traceback.format_exc()
+                results.append(EvalResult(
+                    params=params,
+                    fold_results=[],
+                    agg={},
+                    robust_score=-1e9,
+                    passed=False,
+                    fail_reason=f"EXCEPTION:{type(e).__name__}: {e}",
+                    exception=str(e),
+                    traceback=tb,
+                ))
 
         results.sort(
             key=lambda r: (r.robust_score, r.agg.get("score_worst", -1e9), -r.agg.get("score_std", 1e9)),
@@ -900,6 +931,8 @@ def run_robust_search(
             robust_score=float(pl.get("robust_score", -1e9)),
             passed=bool(pl.get("passed", False)),
             fail_reason=str(pl.get("fail_reason", "") or ""),
+            exception=str(pl.get("exception", "") or ""),
+            traceback=str(pl.get("traceback", "") or ""),
         ))
 
     results.sort(
@@ -918,7 +951,7 @@ def save_results_json(path: str, results: List[EvalResult], meta: Optional[Dict[
     """
     payload = []
     for r in results:
-        payload.append({
+        record = {
             "params": r.params,
             "passed": r.passed,
             "fail_reason": r.fail_reason,
@@ -929,10 +962,30 @@ def save_results_json(path: str, results: List[EvalResult], meta: Optional[Dict[
                 for fr in r.fold_results
             ],
             "meta": meta or {},
-        })
+        }
+        if r.exception:
+            record["exception"] = r.exception
+        if r.traceback:
+            record["traceback"] = r.traceback
+        payload.append(record)
+    _atomic_write_json(path, payload)
+
+
+def _atomic_write_json(path: str, payload: Any) -> None:
     os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(payload, f, ensure_ascii=False, indent=2)
+    dir_name = os.path.dirname(path) or "."
+    tmp_path = ""
+    try:
+        with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=dir_name, delete=False) as tmp:
+            tmp_path = tmp.name
+            json.dump(payload, tmp, ensure_ascii=False, indent=2)
+        os.replace(tmp_path, path)
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            try:
+                os.remove(tmp_path)
+            except Exception:
+                pass
 
 
 # ============================================================
@@ -1046,6 +1099,8 @@ def run_robust_search_parallel(
             robust_score=float(pl.get("robust_score", -1e9)),
             passed=bool(pl.get("passed", False)),
             fail_reason=str(pl.get("fail_reason", "") or ""),
+            exception=str(pl.get("exception", "") or ""),
+            traceback=str(pl.get("traceback", "") or ""),
         ))
 
     results.sort(
@@ -1091,137 +1146,150 @@ def main():
 
     args = ap.parse_args()
 
-    date_from = args.from_date
-    date_to = args.to_date
-    if args.window:
-        date_from, date_to = window_to_dates(args.window)
-
-    if not date_from or not date_to:
-        raise SystemExit("[ROBUST] Missing date range. Provide --window OR (--from-date AND --to-date).")
-
-    print("[ROBUST] loading dataset...")
-    print(f"[ROBUST] date_from={date_from} date_to={date_to} window={args.window!r}")
-
-    data = load_candles_from_path(
-        args.data,
-        date_from=date_from,
-        date_to=date_to,
-        debug=bool(args.debug_loader),
-    )
-    print(f"[ROBUST] data size = {len(data)}")
-
-    if len(data) < int(args.min_candles):
-        print(f"[ROBUST][ERROR] Loaded {len(data)} candles (< min-candles={args.min_candles}).")
-        print("[ROBUST][ERROR] Revisá: ruta --data, CSVs, timestamps, o si el rango window está cubierto.")
-        raise SystemExit(2)
-
-    if args.use_dummy:
-        print("[ROBUST][WARN] Using _dummy_backtest_fn => resultados NO representan performance real todavía.")
-        base_cfg = None
-    else:
-        if not args.base_config:
-            raise SystemExit("[ROBUST] Missing --base-config (required for REAL in-memory backtest).")
-        with open(args.base_config, "r", encoding="utf-8") as f:
-            base_cfg = json.load(f)
-        print("[ROBUST] Using REAL backtest function (in-memory).")
-
-    # resolver workers
-    workers = int(args.workers or 0)
-    if workers <= 0:
-        envw = os.getenv("ROBUST_WORKERS", "").strip()
-        try:
-            workers = int(envw) if envw else 0
-        except Exception:
-            workers = 0
-    if workers <= 0 and (args.parallel or (os.getenv("ROBUST_PARALLEL", "").strip() in ("1", "true", "TRUE", "yes", "YES", "on", "ON"))):
-        cpu = os.cpu_count() or 2
-        workers = max(1, cpu - 1)
-
-    # ✅ batch size
-    batch_size = int(args.batch_size or 0)
-    if batch_size <= 0:
-        env_bs = os.getenv("ROBUST_BATCH_SIZE", "").strip()
-        if env_bs:
-            try:
-                batch_size = int(env_bs)
-            except Exception:
-                batch_size = 0
-    if batch_size <= 0:
-        batch_size = 8  # default recomendado
-    if batch_size < 1:
-        batch_size = 1
-
-    # backtest_fn (secuencial) mantiene compat
-    if args.use_dummy:
-        backtest_fn: BacktestFn = _dummy_backtest_fn
-    else:
-        assert base_cfg is not None
-
-        def backtest_fn(data_slice: Any, params: Dict[str, Any]) -> List[Dict[str, Any]]:
-            return _real_backtest_fn(
-                data_slice,
-                params,
-                base_cfg=base_cfg,
-                symbol=args.symbol,
-                interval=args.interval,
-                warmup=int(args.warmup),
-            )
-
-    # ejecutar
-    if (not args.use_dummy) and workers > 1:
-        assert base_cfg is not None
-        print(f"[ROBUST] Parallel enabled: workers={workers} (spawn-safe) batch_size={batch_size}")
-        results = run_robust_search_parallel(
-            data=data,
-            base_cfg=base_cfg,
-            symbol=args.symbol,
-            interval=args.interval,
-            warmup=int(args.warmup),
-            n_samples=int(args.samples),
-            seed=int(args.seed),
-            n_folds=5,
-            min_train=10_000,
-            min_test=2_000,
-            gates=None,
-            top_k=20,
-            workers=workers,
-            use_dummy=bool(args.use_dummy),
-            batch_size=int(batch_size),
-        )
-    else:
-        if workers > 1 and args.use_dummy:
-            print("[ROBUST][WARN] Parallel + dummy: usando modo secuencial (dummy es demasiado rápido y el overhead domina).")
-        results = run_robust_search(
-            data=data,
-            backtest_fn=backtest_fn,
-            n_samples=args.samples,
-            seed=args.seed,
-        )
-
-    print(f"[ROBUST] finished, top={len(results)}")
-    # meta audit: qué phase y qué keys se samplearon (crítico para congelar A→B)
-    _phase = normalize_phase(None)
-    _space = param_space_for_phase(_phase)
-    meta = {
-        "pipeline_phase": _phase,
-        "space_keys": sorted(list(_space.keys())),
+    out_path = args.out
+    meta: Dict[str, Any] = {
         "symbol": args.symbol,
         "interval": args.interval,
         "window": args.window,
         "seed": int(args.seed),
         "samples": int(args.samples),
-        "workers": int(workers),
-        "batch_size": int(batch_size),
     }
-    save_results_json(args.out, results, meta=meta)
-    print(f"[ROBUST] saved -> {args.out}")
+
+    try:
+        date_from = args.from_date
+        date_to = args.to_date
+        if args.window:
+            date_from, date_to = window_to_dates(args.window)
+
+        if not date_from or not date_to:
+            raise SystemExit("[ROBUST] Missing date range. Provide --window OR (--from-date AND --to-date).")
+
+        print("[ROBUST] loading dataset...")
+        print(f"[ROBUST] date_from={date_from} date_to={date_to} window={args.window!r}")
+
+        data = load_candles_from_path(
+            args.data,
+            date_from=date_from,
+            date_to=date_to,
+            debug=bool(args.debug_loader),
+        )
+        print(f"[ROBUST] data size = {len(data)}")
+
+        if len(data) < int(args.min_candles):
+            print(f"[ROBUST][ERROR] Loaded {len(data)} candles (< min-candles={args.min_candles}).")
+            print("[ROBUST][ERROR] Revisá: ruta --data, CSVs, timestamps, o si el rango window está cubierto.")
+            raise SystemExit(2)
+
+        if args.use_dummy:
+            print("[ROBUST][WARN] Using _dummy_backtest_fn => resultados NO representan performance real todavía.")
+            base_cfg = None
+        else:
+            if not args.base_config:
+                raise SystemExit("[ROBUST] Missing --base-config (required for REAL in-memory backtest).")
+            with open(args.base_config, "r", encoding="utf-8") as f:
+                base_cfg = json.load(f)
+            print("[ROBUST] Using REAL backtest function (in-memory).")
+
+        # resolver workers
+        workers = int(args.workers or 0)
+        if workers <= 0:
+            envw = os.getenv("ROBUST_WORKERS", "").strip()
+            try:
+                workers = int(envw) if envw else 0
+            except Exception:
+                workers = 0
+        if workers <= 0 and (args.parallel or (os.getenv("ROBUST_PARALLEL", "").strip() in ("1", "true", "TRUE", "yes", "YES", "on", "ON"))):
+            cpu = os.cpu_count() or 2
+            workers = max(1, cpu - 1)
+
+        # ✅ batch size
+        batch_size = int(args.batch_size or 0)
+        if batch_size <= 0:
+            env_bs = os.getenv("ROBUST_BATCH_SIZE", "").strip()
+            if env_bs:
+                try:
+                    batch_size = int(env_bs)
+                except Exception:
+                    batch_size = 0
+        if batch_size <= 0:
+            batch_size = 8  # default recomendado
+        if batch_size < 1:
+            batch_size = 1
+
+        # backtest_fn (secuencial) mantiene compat
+        if args.use_dummy:
+            backtest_fn: BacktestFn = _dummy_backtest_fn
+        else:
+            assert base_cfg is not None
+
+            def backtest_fn(data_slice: Any, params: Dict[str, Any]) -> List[Dict[str, Any]]:
+                return _real_backtest_fn(
+                    data_slice,
+                    params,
+                    base_cfg=base_cfg,
+                    symbol=args.symbol,
+                    interval=args.interval,
+                    warmup=int(args.warmup),
+                )
+
+        # ejecutar
+        if (not args.use_dummy) and workers > 1:
+            assert base_cfg is not None
+            print(f"[ROBUST] Parallel enabled: workers={workers} (spawn-safe) batch_size={batch_size}")
+            results = run_robust_search_parallel(
+                data=data,
+                base_cfg=base_cfg,
+                symbol=args.symbol,
+                interval=args.interval,
+                warmup=int(args.warmup),
+                n_samples=int(args.samples),
+                seed=int(args.seed),
+                n_folds=5,
+                min_train=10_000,
+                min_test=2_000,
+                gates=None,
+                top_k=20,
+                workers=workers,
+                use_dummy=bool(args.use_dummy),
+                batch_size=int(batch_size),
+            )
+        else:
+            if workers > 1 and args.use_dummy:
+                print("[ROBUST][WARN] Parallel + dummy: usando modo secuencial (dummy es demasiado rápido y el overhead domina).")
+            results = run_robust_search(
+                data=data,
+                backtest_fn=backtest_fn,
+                n_samples=args.samples,
+                seed=args.seed,
+            )
+
+        print(f"[ROBUST] finished, top={len(results)}")
+        # meta audit: qué phase y qué keys se samplearon (crítico para congelar A→B)
+        _phase = normalize_phase(None)
+        _space = param_space_for_phase(_phase)
+        meta.update({
+            "pipeline_phase": _phase,
+            "space_keys": sorted(list(_space.keys())),
+            "workers": int(workers),
+            "batch_size": int(batch_size),
+        })
+        save_results_json(out_path, results, meta=meta)
+        print(f"[ROBUST] saved -> {out_path}")
+    except Exception as e:
+        import traceback
+        err_payload = {
+            "passed": False,
+            "fail_reason": f"TOPLEVEL_EXCEPTION:{type(e).__name__}",
+            "exception": str(e),
+            "traceback": traceback.format_exc(),
+            "meta": meta,
+        }
+        _atomic_write_json(out_path, err_payload)
+        raise
 
 
 if __name__ == "__main__":
     main()
-
-
-
 
 
 
