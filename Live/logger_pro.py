@@ -216,6 +216,8 @@ class TradeLogger:
     # Adapter API
     # -------------------------
     def set_pending_meta(self, meta_json: Any) -> None:
+        if self._trade_log_disabled:
+            return
         self._pending_meta_json = _safe_json_str(meta_json)
 
     def _time_fields(self, ts_ms: int):
@@ -413,10 +415,11 @@ class TradeLogger:
             self.active_trade = None
 
     def log(self, **k):
+        if self._trade_log_disabled:
+            return
         if "open" in k or "candle" in k:
             self.log_bar(**k)
         else:
             self.log_trade(**k)
-
 
 
