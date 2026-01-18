@@ -1,35 +1,19 @@
 {
   "phase": "A",
-
-  "scope": "single_run",
-
   "filters": {
-    "trades": {
-      "min": 15
-    },
-    "profit_factor": {
-      "min": 0.95
-    },
-    "winrate": {
-      "min": 0.30
-    },
-    "max_drawdown_r": {
-      "max": 45.0
-    },
-    "expectancy": {
-      "min": -0.01
-    },
-    "robust_score": {
-      "min": -0.05
-    }
+    "trades_min":        { "min": 5 },
+    "pf_mean":           { "min": 0.80 },
+    "winrate_mean":      { "min": 0.25 },
+    "dd_max":            { "max": 80 },
+    "robust_score_mean": { "min": -0.20 }
   },
-
   "promotion": {
     "min_seeds_passed": 1,
-    "min_windows_passed": 2,
-    "top_k": 30
+    "min_windows_passed": 1,
+    "top_k": 50
   }
 }
+
 
 
 
