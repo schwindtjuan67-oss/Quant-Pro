@@ -5,6 +5,8 @@ import os
 # RUN MODE (PIPELINE | SHADOW | LIVE)
 # ============================================================
 RUN_MODE = os.getenv("RUN_MODE", "LIVE").upper()
+PIPELINE_VERBOSE_DIAGNOSTICS = os.getenv("PIPELINE_VERBOSE_DIAGNOSTICS", "0").lower() in ("1", "true", "yes")
+PIPELINE_DISABLE_GPU = RUN_MODE == "PIPELINE" and os.getenv("PIPELINE_DISABLE_GPU", "0").lower() in ("1", "true", "yes")
 
 
 import sys, os
@@ -346,17 +348,19 @@ class HybridScalperPRO:
         # GPUFeatureEngine: compat con firmas distintas (infra vs fallback)
         # ------------------------------------------------------------
         self.VWAP_WINDOW = max(1, int(getattr(self, "VWAP_WINDOW", 96)))
-        try:
-            # firma fallback (max_recent)
-            self.gpu = GPUFeatureEngine(max_len=2000, atr_n=int(self.ATR_N), max_recent=300)
-        except TypeError:
-            # firma infra.gpu_features (vwap_window/vol_window)
-            self.gpu = GPUFeatureEngine(
-                max_len=2000,
-                atr_n=int(self.ATR_N),
-                vwap_window=int(self.VWAP_WINDOW),
-                vol_window=max(1, int(getattr(self, "VOL_WINDOW", 30))),
-            )
+        self.gpu = None
+        if not PIPELINE_DISABLE_GPU:
+            try:
+                # firma fallback (max_recent)
+                self.gpu = GPUFeatureEngine(max_len=2000, atr_n=int(self.ATR_N), max_recent=300)
+            except TypeError:
+                # firma infra.gpu_features (vwap_window/vol_window)
+                self.gpu = GPUFeatureEngine(
+                    max_len=2000,
+                    atr_n=int(self.ATR_N),
+                    vwap_window=int(self.VWAP_WINDOW),
+                    vol_window=max(1, int(getattr(self, "VOL_WINDOW", 30))),
+                )
 
         # -------- HOURLY FLAGS state
         self._hourly_flags_last_load_ts: float = 0.0
@@ -1319,6 +1323,8 @@ class HybridScalperPRO:
     # ENTRY DIAGNOSTICS (print helper)
     # ===============================
     def _print_entry_diagnostics(self) -> None:
+        if RUN_MODE == "PIPELINE" and not PIPELINE_VERBOSE_DIAGNOSTICS:
+            return
         d = getattr(self, "_entry_diag", None)
         if not isinstance(d, dict):
             return
@@ -1588,5 +1594,3 @@ class HybridScalperPRO:
             return
 
         return
-
-

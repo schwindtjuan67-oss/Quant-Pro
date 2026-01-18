@@ -29,6 +29,8 @@ set "PYTHONIOENCODING=utf-8"
 set "PYTHONUNBUFFERED=1"
 set "RUN_MODE=PIPELINE"
 set "PIPELINE_DISABLE_TRADE_LOG=1"
+set "PIPELINE_VERBOSE_DIAGNOSTICS=0"
+set "PIPELINE_DISABLE_GPU=0"
 
 if not exist "%ROOT%\analysis\__init__.py" (
   type nul > "%ROOT%\analysis\__init__.py"
@@ -153,6 +155,7 @@ REM =========================
 REM FASE A — ROBUST
 REM =========================
 set "PIPELINE_PHASE=A"
+set "PIPELINE_DISABLE_GPU=1"
 
 for %%W in (%WINDOWS%) do (
   for %%S in (%SEEDS%) do (
@@ -174,6 +177,8 @@ for %%W in (%WINDOWS%) do (
     )
   )
 )
+
+set "PIPELINE_DISABLE_GPU=0"
 
 REM =========================
 REM POST A — ÚNICO PROMOTOR A→B
