@@ -3,8 +3,8 @@
   "filters": {
     "reject_degenerate": true,
     "thresholds": {
-      "trades_min": { "min": 250 },
-      "dd_max":     { "max": 0.45 }
+      "trades_min": { "min": 200 },
+      "dd_max":     { "max": 0.50 }
     }
   },
   "promotion": {
