@@ -1147,6 +1147,7 @@ def main():
     args = ap.parse_args()
 
     out_path = args.out
+    os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
     meta: Dict[str, Any] = {
         "symbol": args.symbol,
         "interval": args.interval,
@@ -1290,7 +1291,6 @@ def main():
 
 if __name__ == "__main__":
     main()
-
 
 
 

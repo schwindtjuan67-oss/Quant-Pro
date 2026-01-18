@@ -5,6 +5,9 @@ from typing import Any, Dict, List
 import os
 
 os.environ["QS_BACKTEST"] = "1"
+RUN_MODE = os.getenv("RUN_MODE", "LIVE").upper().strip()
+PIPELINE_VERBOSE_DIAGNOSTICS = os.getenv("PIPELINE_VERBOSE_DIAGNOSTICS", "0").strip().lower() in ("1", "true", "yes")
+PIPELINE_DISABLE_GPU = RUN_MODE == "PIPELINE" and os.getenv("PIPELINE_DISABLE_GPU", "0").strip().lower() in ("1", "true", "yes")
 
 # ------------------------------------------------------------
 # GPU feeder (opcional)
@@ -50,7 +53,7 @@ class BacktestRunner:
         self.interval = interval
         self.warmup = int(warmup_candles)
 
-        self.use_gpu = bool(use_gpu and _HAS_GPU_FEEDER)
+        self.use_gpu = bool(use_gpu and _HAS_GPU_FEEDER and not PIPELINE_DISABLE_GPU)
         self.gpu_batch_size = int(gpu_batch_size)
 
     # ------------------------------------------------------------
@@ -166,9 +169,10 @@ class BacktestRunner:
         diag = getattr(core, "_entry_diag", None) if core else None
 
         if isinstance(diag, dict) and diag:
-            print("\nENTRY DIAGNOSTICS")
-            for k, v in diag.items():
-                print(f"{k:12}: {v}")
+            if not (RUN_MODE == "PIPELINE" and not PIPELINE_VERBOSE_DIAGNOSTICS):
+                print("\nENTRY DIAGNOSTICS")
+                for k, v in diag.items():
+                    print(f"{k:12}: {v}")
 
         # ---------------- Result ----------------
         trades = len(engine.logger.trades)
@@ -179,4 +183,3 @@ class BacktestRunner:
             "trades": int(trades),
             "notes": "BacktestRunner GPU OK" if self.use_gpu else "BacktestRunner CPU OK",
         }
-
