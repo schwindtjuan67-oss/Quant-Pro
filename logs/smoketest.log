@@ -1,0 +1,9 @@
+=====================================================
+[SMOKE TEST] 18/01/2026  8:44:06,15
+ROOT=C:\Users\PC\Documents\GitHub\Quant-Pro
+DATA=datasets\SOLUSDT\1m
+WINDOW=2022-01_2023-06
+SEED=5946
+=====================================================
+[SMOKE TEST] Running ROBUST...
+^C
