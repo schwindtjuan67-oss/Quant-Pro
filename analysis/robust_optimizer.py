@@ -610,10 +610,14 @@ def _worker_eval_one(params: Dict[str, Any]) -> Dict[str, Any]:
         }
     except Exception as e:
         # 🔴 cualquier otro crash del worker
+        import traceback
+        tb = traceback.format_exc()
         return {
             "params": params,
             "passed": False,
             "fail_reason": f"EXCEPTION:{type(e).__name__}: {e}",
+            "exception": str(e),
+            "traceback": tb,
             "agg": {},
             "robust_score": -1e9,
             "folds": [],
@@ -653,10 +657,14 @@ def _worker_eval_batch(params_batch: List[Dict[str, Any]]) -> List[Dict[str, Any
                 "folds": [],
             })
         except Exception as e:
+            import traceback
+            tb = traceback.format_exc()
             out.append({
                 "params": p,
                 "passed": False,
                 "fail_reason": f"EXCEPTION:{type(e).__name__}: {e}",
+                "exception": str(e),
+                "traceback": tb,
                 "agg": {},
                 "robust_score": -1e9,
                 "folds": [],
@@ -842,6 +850,8 @@ def run_robust_search(
                     done_params += 1
 
             except Exception as e:
+                import traceback
+                tb = traceback.format_exc()
                 # Exception: si era batch, marcamos todos los params del batch
                 if fut in fut_to_batch:
                     b = fut_to_batch[fut]
@@ -850,6 +860,8 @@ def run_robust_search(
                             "params": p,
                             "passed": False,
                             "fail_reason": f"EXCEPTION:{type(e).__name__}: {e}",
+                            "exception": str(e),
+                            "traceback": tb,
                             "agg": {},
                             "robust_score": -1e9,
                             "folds": [],
@@ -860,6 +872,8 @@ def run_robust_search(
                         "params": {},
                         "passed": False,
                         "fail_reason": f"EXCEPTION:{type(e).__name__}: {e}",
+                        "exception": str(e),
+                        "traceback": tb,
                         "agg": {},
                         "robust_score": -1e9,
                         "folds": [],
@@ -1205,7 +1219,6 @@ def main():
 
 if __name__ == "__main__":
     main()
-
 
 
 
