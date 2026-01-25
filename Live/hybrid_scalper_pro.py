@@ -6,6 +6,7 @@ import os
 # ============================================================
 RUN_MODE = os.getenv("RUN_MODE", "LIVE").upper()
 PIPELINE_VERBOSE_DIAGNOSTICS = os.getenv("PIPELINE_VERBOSE_DIAGNOSTICS", "0").lower() in ("1", "true", "yes")
+PIPELINE_VERBOSE_HYBRID = os.getenv("PIPELINE_VERBOSE_HYBRID", "0").lower() in ("1", "true", "yes")
 PIPELINE_DISABLE_GPU = RUN_MODE == "PIPELINE" and os.getenv("PIPELINE_DISABLE_GPU", "0").lower() in ("1", "true", "yes")
 
 
@@ -486,7 +487,7 @@ class HybridScalperPRO:
             self._silent = False
 
         def _p(*args, **kwargs):
-            if not self._silent:
+            if not self._silent and (RUN_MODE != "PIPELINE" or PIPELINE_VERBOSE_HYBRID):
                 print(*args, **kwargs)
         self._p = _p
 

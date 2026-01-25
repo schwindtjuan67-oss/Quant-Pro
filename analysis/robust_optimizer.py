@@ -617,10 +617,14 @@ def _worker_eval_one(params: Dict[str, Any]) -> Dict[str, Any]:
         )
     except MemoryError:
         # 🔴 OOM explícito
+        import traceback
+        tb = traceback.format_exc()
         return {
             "params": params,
             "passed": False,
             "fail_reason": "OOM",
+            "exception": "MemoryError",
+            "traceback": tb,
             "agg": {},
             "robust_score": -1e9,
             "folds": [],
@@ -665,10 +669,14 @@ def _worker_eval_batch(params_batch: List[Dict[str, Any]]) -> List[Dict[str, Any
         try:
             out.append(_evaluate_params_on_cached_test_slices(p))
         except MemoryError:
+            import traceback
+            tb = traceback.format_exc()
             out.append({
                 "params": p,
                 "passed": False,
                 "fail_reason": "OOM",
+                "exception": "MemoryError",
+                "traceback": tb,
                 "agg": {},
                 "robust_score": -1e9,
                 "folds": [],
@@ -1291,6 +1299,5 @@ def main():
 
 if __name__ == "__main__":
     main()
-
 
 
