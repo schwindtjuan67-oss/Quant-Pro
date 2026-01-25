@@ -147,6 +147,9 @@ class BacktestRunner:
         live_candles = self.candles[self.warmup :]
 
         # ---------------- MAIN LOOP ----------------
+        if self.use_gpu and PIPELINE_DISABLE_GPU:
+            self.use_gpu = False
+
         if self.use_gpu:
             print("[BACKTEST] GPUCandleFeeder ENABLED")
             feeder = GPUCandleFeeder(
