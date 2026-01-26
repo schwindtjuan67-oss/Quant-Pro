@@ -1493,6 +1493,8 @@ def main():
     ap.add_argument("--symbol", default=None, help="override symbol (ej: SOLUSDT)")
     ap.add_argument("--interval", default="1m", help="interval (default 1m)")
     ap.add_argument("--warmup", type=int, default=500, help="candles warmup")
+    ap.add_argument("--min-train", type=int, default=10000, help="min candles for train split")
+    ap.add_argument("--min-test", type=int, default=2000, help="min candles for test split")
 
     # ✅ paralelo (opcionales)
     ap.add_argument("--workers", type=int, default=0, help="workers para paralelo (0=auto/env/disabled)")
@@ -1513,6 +1515,8 @@ def main():
         "window": args.window,
         "seed": int(args.seed),
         "samples": int(args.samples),
+        "min_train": int(args.min_train),
+        "min_test": int(args.min_test),
     }
 
     try:
@@ -1614,8 +1618,8 @@ def main():
                 n_samples=int(args.samples if not revalidate_params else len(revalidate_params)),
                 seed=int(args.seed),
                 n_folds=folds,
-                min_train=10_000,
-                min_test=2_000,
+                min_train=int(args.min_train),
+                min_test=int(args.min_test),
                 gates=None,
                 top_k=len(revalidate_params) if revalidate_params else 20,
                 workers=workers,
@@ -1633,6 +1637,8 @@ def main():
                 n_samples=int(args.samples if not revalidate_params else len(revalidate_params)),
                 seed=args.seed,
                 n_folds=folds,
+                min_train=int(args.min_train),
+                min_test=int(args.min_test),
                 window=window_label,
                 params_list=revalidate_params,
             )
