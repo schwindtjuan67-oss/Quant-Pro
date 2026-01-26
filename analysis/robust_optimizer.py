@@ -437,6 +437,7 @@ def evaluate_params_walk_forward(
     test_slices: Optional[List[Any]] = None,
     feature_caches: Optional[List[FeatureCache]] = None,
     score_fallback: str = "none",
+    sample_idx: Optional[int] = None,
 ) -> EvalResult:
     fold_results: List[FoldResult] = []
     passed = True
@@ -446,6 +447,7 @@ def evaluate_params_walk_forward(
         test_data = test_slices[i] if test_slices is not None else data[te_slice]
         if feature_caches is not None and i < len(feature_caches):
             set_active_cache(feature_caches[i])
+        _set_diag_context(sample_idx, i)
         trades_test = backtest_fn(test_data, params)
 
         m = compute_metrics_from_trades(trades_test)
@@ -534,6 +536,12 @@ def _real_backtest_fn(
     last_err: Optional[Exception] = None
 
     # Probar firmas comunes sin romper
+    _emit_verbose_diagnostics(
+        params=params,
+        base_cfg=base_cfg,
+        symbol=symbol,
+        interval=interval,
+    )
     for call in (
         lambda: fn(candles=data_slice, strategy_params=params, base_config=base_cfg, symbol=symbol, interval=interval, warmup_candles=warmup),
         lambda: fn(candles=data_slice, params=params, base_config=base_cfg, symbol=symbol, interval=interval, warmup_candles=warmup),
@@ -592,9 +600,148 @@ _WORKER_SPLITS: List[Tuple[slice, slice]] = []
 _WORKER_USE_DUMMY: bool = False
 _WORKER_SCORE_FALLBACK: str = "none"
 
+# ✅ DIAGNOSTICS: contexto por llamada (sample/fold) + estático (window/date range)
+_DIAG_CONTEXT: Dict[str, Any] = {}
+_DIAG_STATIC_CONTEXT: Dict[str, Any] = {}
+
 # ✅ NUEVO: slice cache por worker (lista de test_slices ya materializados)
 _WORKER_TEST_SLICES: Optional[List[Any]] = None  # Any para permitir list/slice/np/etc
 _WORKER_FEATURE_CACHES: Optional[List[FeatureCache]] = None
+
+_SPACE_KEYS = [
+    "ema_fast",
+    "ema_slow",
+    "atr_len",
+    "sl_atr_mult",
+    "tp_atr_mult",
+    "rr_min",
+    "delta_threshold",
+    "delta_rolling_sec",
+    "cooldown_sec",
+    "max_trades_day",
+    "use_time_filter",
+    "hour_start",
+    "hour_end",
+]
+
+
+def _diagnostics_enabled() -> bool:
+    return os.getenv("PIPELINE_VERBOSE_DIAGNOSTICS", "").strip() in (
+        "1",
+        "true",
+        "TRUE",
+        "yes",
+        "YES",
+        "on",
+        "ON",
+    )
+
+
+def _set_diag_context(sample_idx: Optional[int], fold_idx: Optional[int]) -> None:
+    if not _diagnostics_enabled():
+        return
+    _DIAG_CONTEXT.clear()
+    if sample_idx is not None:
+        _DIAG_CONTEXT["sample_idx"] = sample_idx
+    if fold_idx is not None:
+        _DIAG_CONTEXT["fold_idx"] = fold_idx
+
+
+def _set_diag_static_context(window: Optional[str], from_date: Optional[str], to_date: Optional[str]) -> None:
+    if not _diagnostics_enabled():
+        return
+    _DIAG_STATIC_CONTEXT.clear()
+    if window:
+        _DIAG_STATIC_CONTEXT["window"] = window
+    if from_date:
+        _DIAG_STATIC_CONTEXT["from_date"] = from_date
+    if to_date:
+        _DIAG_STATIC_CONTEXT["to_date"] = to_date
+
+
+def _unwrap_sample_params(param_input: Any) -> Tuple[Optional[int], Dict[str, Any]]:
+    if isinstance(param_input, tuple) and len(param_input) == 2:
+        idx, params = param_input
+        if isinstance(params, dict):
+            try:
+                return (int(idx), params)
+            except Exception:
+                return (None, params)
+    if isinstance(param_input, dict):
+        return (None, param_input)
+    return (None, {})
+
+
+def _diag_dump(value: Any) -> str:
+    try:
+        return json.dumps(value, ensure_ascii=False, sort_keys=True)
+    except Exception:
+        return repr(value)
+
+
+def _extract_cfg_param_sources(base_cfg: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    if not isinstance(base_cfg, dict):
+        return {}
+    strategy = base_cfg.get("strategy")
+    return {
+        "cfg.params": base_cfg.get("params"),
+        "cfg.strategy.params": strategy.get("params") if isinstance(strategy, dict) else None,
+        "cfg.strategy_config": base_cfg.get("strategy_config"),
+        "cfg.strategy_kwargs": base_cfg.get("strategy_kwargs"),
+        "cfg.strategy_settings": base_cfg.get("strategy_settings"),
+    }
+
+
+def _pick_effective_params(params: Dict[str, Any], sources: Dict[str, Any]) -> Dict[str, Any]:
+    if isinstance(params, dict) and any(k in params for k in _SPACE_KEYS):
+        source = params
+    else:
+        source = None
+        for key in (
+            "cfg.strategy.params",
+            "cfg.params",
+            "cfg.strategy_config",
+            "cfg.strategy_kwargs",
+            "cfg.strategy_settings",
+        ):
+            candidate = sources.get(key)
+            if isinstance(candidate, dict):
+                source = candidate
+                break
+        if source is None:
+            source = {}
+    return {k: source.get(k) for k in _SPACE_KEYS}
+
+
+def _emit_verbose_diagnostics(
+    *,
+    params: Dict[str, Any],
+    base_cfg: Optional[Dict[str, Any]],
+    symbol: Optional[str],
+    interval: str,
+) -> None:
+    if not _diagnostics_enabled():
+        return
+    sample_idx = _DIAG_CONTEXT.get("sample_idx")
+    fold_idx = _DIAG_CONTEXT.get("fold_idx")
+    sources = _extract_cfg_param_sources(base_cfg)
+    picked = _pick_effective_params(params, sources)
+    print(
+        f"[ROBUST][DIAG] sample={sample_idx} fold={fold_idx}",
+        flush=True,
+    )
+    print(f"  params={_diag_dump(params)}", flush=True)
+    for key, value in sources.items():
+        print(f"  {key}={_diag_dump(value)}", flush=True)
+    print(f"  picked_effective={_diag_dump(picked)}", flush=True)
+    args_payload = {
+        "symbol": symbol,
+        "interval": interval,
+        "window": _DIAG_STATIC_CONTEXT.get("window"),
+        "from_date": _DIAG_STATIC_CONTEXT.get("from_date"),
+        "to_date": _DIAG_STATIC_CONTEXT.get("to_date"),
+    }
+    print(f"  backtest_args={_diag_dump(args_payload)}", flush=True)
 
 
 def _worker_init(
@@ -607,6 +754,7 @@ def _worker_init(
     splits: List[Tuple[slice, slice]],
     use_dummy: bool,
     score_fallback: str,
+    diag_context: Optional[Dict[str, Any]] = None,
 ):
     # Se ejecuta 1 vez por proceso
     global _WORKER_DATA, _WORKER_BASE_CFG, _WORKER_SYMBOL, _WORKER_INTERVAL, _WORKER_WARMUP, _WORKER_GATES, _WORKER_SPLITS, _WORKER_USE_DUMMY, _WORKER_TEST_SLICES, _WORKER_FEATURE_CACHES, _WORKER_SCORE_FALLBACK
@@ -619,6 +767,9 @@ def _worker_init(
     _WORKER_SPLITS = splits or []
     _WORKER_USE_DUMMY = bool(use_dummy)
     _WORKER_SCORE_FALLBACK = score_fallback
+    if isinstance(diag_context, dict) and _diagnostics_enabled():
+        _DIAG_STATIC_CONTEXT.clear()
+        _DIAG_STATIC_CONTEXT.update(diag_context)
 
     # ✅ Slice cache (reduce overhead de slicing repetido por param)
     try:
@@ -659,13 +810,14 @@ def _worker_backtest_fn(data_slice: Any, params: Dict[str, Any]) -> List[Dict[st
 # ============================================================
 
 def _evaluate_params_on_cached_test_slices(
-    params: Dict[str, Any],
+    param_input: Any,
 ) -> Dict[str, Any]:
     global _WORKER_TEST_SLICES, _WORKER_GATES, _WORKER_FEATURE_CACHES, _WORKER_SCORE_FALLBACK
 
+    sample_idx, params = _unwrap_sample_params(param_input)
     if _WORKER_TEST_SLICES is None:
         # fallback a la vieja vía (no debería si init pudo cachear)
-        return _worker_eval_one(params)
+        return _worker_eval_one(param_input)
 
     try:
         fold_results: List[FoldResult] = []
@@ -675,6 +827,7 @@ def _evaluate_params_on_cached_test_slices(
         for i, test_data in enumerate(_WORKER_TEST_SLICES):
             if _WORKER_FEATURE_CACHES is not None and i < len(_WORKER_FEATURE_CACHES):
                 set_active_cache(_WORKER_FEATURE_CACHES[i])
+            _set_diag_context(sample_idx, i)
             trades_test = _worker_backtest_fn(test_data, params)
 
             m = compute_metrics_from_trades(trades_test)
@@ -730,11 +883,12 @@ def _evaluate_params_on_cached_test_slices(
         }
 
 
-def _worker_eval_one(params: Dict[str, Any]) -> Dict[str, Any]:
+def _worker_eval_one(param_input: Any) -> Dict[str, Any]:
     global _WORKER_DATA
     if _WORKER_DATA is None:
         raise RuntimeError("[ROBUST][WORKER] Missing worker data (init not called).")
 
+    sample_idx, params = _unwrap_sample_params(param_input)
     try:
         er = evaluate_params_walk_forward(
             data=_WORKER_DATA,
@@ -743,6 +897,7 @@ def _worker_eval_one(params: Dict[str, Any]) -> Dict[str, Any]:
             splits=_WORKER_SPLITS,
             gates=_WORKER_GATES,
             score_fallback=_WORKER_SCORE_FALLBACK,
+            sample_idx=sample_idx,
         )
     except MemoryError:
         # 🔴 OOM explícito
@@ -792,7 +947,7 @@ def _worker_eval_one(params: Dict[str, Any]) -> Dict[str, Any]:
 #    - mantiene OOM/EXCEPTION por param (no revienta todo el batch)
 # ============================================================
 
-def _worker_eval_batch(params_batch: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def _worker_eval_batch(params_batch: List[Any]) -> List[Dict[str, Any]]:
     out: List[Dict[str, Any]] = []
     for p in params_batch:
         try:
@@ -800,8 +955,9 @@ def _worker_eval_batch(params_batch: List[Dict[str, Any]]) -> List[Dict[str, Any
         except MemoryError:
             import traceback
             tb = traceback.format_exc()
+            _sample_idx, params = _unwrap_sample_params(p)
             out.append({
-                "params": p,
+                "params": params,
                 "passed": False,
                 "fail_reason": ["OOM"],
                 "exception": "MemoryError",
@@ -813,8 +969,9 @@ def _worker_eval_batch(params_batch: List[Dict[str, Any]]) -> List[Dict[str, Any
         except Exception as e:
             import traceback
             tb = traceback.format_exc()
+            _sample_idx, params = _unwrap_sample_params(p)
             out.append({
-                "params": p,
+                "params": params,
                 "passed": False,
                 "fail_reason": [f"EXCEPTION:{type(e).__name__}: {e}"],
                 "exception": str(e),
@@ -914,7 +1071,7 @@ def run_robust_search(
         hb_last_emit = hb_started_at
         window_label = window or "unknown"
         failed_samples: List[Dict[str, Any]] = []
-        for params in params_list:
+        for sample_idx, params in enumerate(params_list):
             try:
                 er = evaluate_params_walk_forward(
                     data=data,
@@ -925,6 +1082,7 @@ def run_robust_search(
                     test_slices=test_slices,
                     feature_caches=feature_caches,
                     score_fallback=score_fallback,
+                    sample_idx=sample_idx,
                 )
                 results.append(er)
             except Exception as e:
@@ -1015,6 +1173,7 @@ def run_robust_search(
             splits,
             use_dummy,
             score_fallback,
+            dict(_DIAG_STATIC_CONTEXT),
         ),
     ) as ex:
         # ============================================================
@@ -1023,12 +1182,13 @@ def run_robust_search(
 
         fut_to_batch: Dict[Any, List[Dict[str, Any]]] = {}
 
+        params_payloads = list(enumerate(params_list))
         if batch_size == 1:
-            futs = [ex.submit(_evaluate_params_on_cached_test_slices, p) for p in params_list]
+            futs = [ex.submit(_evaluate_params_on_cached_test_slices, p) for p in params_payloads]
         else:
-            batches: List[List[Dict[str, Any]]] = []
-            for i in range(0, len(params_list), batch_size):
-                batches.append(params_list[i:i + batch_size])
+            batches: List[List[Any]] = []
+            for i in range(0, len(params_payloads), batch_size):
+                batches.append(params_payloads[i:i + batch_size])
             futs = [ex.submit(_worker_eval_batch, b) for b in batches]
             fut_to_batch = {fut: b for fut, b in zip(futs, batches)}
 
@@ -1082,8 +1242,9 @@ def run_robust_search(
                 if fut in fut_to_batch:
                     b = fut_to_batch[fut]
                     for p in b:
+                        _sample_idx, params = _unwrap_sample_params(p)
                         payload = {
-                            "params": p,
+                            "params": params,
                             "passed": False,
                             "fail_reason": ["TIMEOUT"],
                             "agg": {},
@@ -1129,8 +1290,9 @@ def run_robust_search(
                 if fut in fut_to_batch:
                     b = fut_to_batch[fut]
                     for p in b:
+                        _sample_idx, params = _unwrap_sample_params(p)
                         payload = {
-                            "params": p,
+                            "params": params,
                             "passed": False,
                             "fail_reason": [f"EXCEPTION:{type(e).__name__}: {e}"],
                             "exception": str(e),
@@ -1426,10 +1588,22 @@ def run_robust_search_parallel(
         max_workers=max(1, int(workers)),
         mp_context=ctx,
         initializer=_worker_init,
-        initargs=(data, base_cfg, symbol, interval, int(warmup), gates, splits, bool(use_dummy), score_fallback),
+        initargs=(
+            data,
+            base_cfg,
+            symbol,
+            interval,
+            int(warmup),
+            gates,
+            splits,
+            bool(use_dummy),
+            score_fallback,
+            dict(_DIAG_STATIC_CONTEXT),
+        ),
     ) as ex:
+        params_payloads = list(enumerate(params_list))
         if batch_size == 1:
-            futs = [ex.submit(_evaluate_params_on_cached_test_slices, p) for p in params_list]
+            futs = [ex.submit(_evaluate_params_on_cached_test_slices, p) for p in params_payloads]
             done = 0
             for fut in as_completed(futs):
                 done += 1
@@ -1460,9 +1634,9 @@ def run_robust_search_parallel(
                     int(seed),
                 )
         else:
-            batches: List[List[Dict[str, Any]]] = []
-            for i in range(0, len(params_list), batch_size):
-                batches.append(params_list[i:i + batch_size])
+            batches: List[List[Any]] = []
+            for i in range(0, len(params_payloads), batch_size):
+                batches.append(params_payloads[i:i + batch_size])
 
             futs = [ex.submit(_worker_eval_batch, b) for b in batches]
             done_params = 0
@@ -1642,6 +1816,7 @@ def main():
             raise SystemExit("[ROBUST] Missing date range. Provide --window OR (--from-date AND --to-date).")
 
         window_label = args.window or f"{date_from[:7]}_{date_to[:7]}"
+        _set_diag_static_context(window_label, date_from, date_to)
         out_path = (args.out or "").strip()
         if out_path:
             os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
