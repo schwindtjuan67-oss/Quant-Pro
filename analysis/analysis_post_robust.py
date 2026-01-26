@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
 import os
 import sys
 import json
@@ -16,6 +17,11 @@ from typing import Dict, List, Any, Tuple, Optional
 # PATH SETUP
 # -------------------------------------------------
 
+=======
+import os, sys, json, glob, statistics
+from typing import Dict, List, Any, Tuple, Optional
+
+>>>>>>> Stashed changes
 =======
 import os, sys, json, glob, statistics
 from typing import Dict, List, Any, Tuple, Optional
@@ -36,6 +42,7 @@ OUT_DIR = "results/promotions"
 RULES_PATH = os.path.join("configs", "promotion_rules_A.json")
 
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
 RULES_PATH = os.getenv(
     "PIPELINE_RULES",
     os.path.join("configs", "promotion_rules_A.json"),
@@ -53,23 +60,46 @@ SEEDS: Optional[set] = None  # None = aceptar cualquier seed
 # -------------------------------------------------
 
 =======
+=======
+>>>>>>> Stashed changes
 SEEDS: Optional[set] = None          # None = aceptar cualquier seed
 MIN_SEED_PASSES = 1                 # seeds mínimos por ventana
 MIN_WINDOWS_PASSES = 2              # ventanas mínimas
 TOP_K_PROMOTED = 30
 
+<<<<<<< Updated upstream
+=======
 # ===============================
 # RULE LOADING
 # ===============================
 
+with open(RULES_PATH, "r", encoding="utf-8") as f:
+    RULES = json.load(f)
+
+>>>>>>> Stashed changes
+# ===============================
+# RULE LOADING
+# ===============================
+
+<<<<<<< Updated upstream
 >>>>>>> Stashed changes
 with open(RULES_PATH, "r", encoding="utf-8") as f:
     RULES = json.load(f)
+=======
+def _metric(rec: Dict[str, Any], key: str, default=0.0) -> float:
+    agg = rec.get("agg", {}) or {}
+    return float(agg.get(key, default) or default)
+
+def _passes_rules(rec: Dict[str, Any]) -> bool:
+    agg = rec.get("agg", {}) or {}
+    folds = rec.get("folds", []) or []
+>>>>>>> Stashed changes
 
 FILTERS = RULES.get("filters", {})
 PROMOTION = RULES.get("promotion", {})
 PHASE = str(RULES.get("phase", "A")).upper()
 
+<<<<<<< Updated upstream
 <<<<<<< Updated upstream
 MIN_SEED_PASSES = int(PROMOTION.get("min_seeds_passed", 1))
 MIN_WINDOWS_PASSES = int(PROMOTION.get("min_windows_passed", 1))
@@ -151,6 +181,8 @@ def _passes_filters_verbose(
     return (len(reasons) == 0), reasons
 
 =======
+=======
+>>>>>>> Stashed changes
     return (
         trades >= RULES["min_trades_total_mean"]
         and trades >= RULES["min_trades_total_min"]
@@ -161,6 +193,9 @@ def _passes_filters_verbose(
         and _metric(rec, "robust_score") >= RULES["min_robust_mean"]
     )
 
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
 def promotion_score(scores: List[float]) -> float:
     if not scores:
@@ -177,10 +212,13 @@ def parse_filename(path: str) -> Tuple[str, int]:
     return parts[0].replace("robust_", ""), int(parts[1])
 
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
 # -------------------------------------------------
 # MAIN
 # -------------------------------------------------
 =======
+=======
+>>>>>>> Stashed changes
 # ===============================
 # MAIN
 # ===============================
@@ -195,6 +233,7 @@ def main() -> None:
         return
 
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
     frozen_keys = phase_keys(PHASE)
 
     # window -> param_key -> seed -> record
@@ -202,6 +241,9 @@ def main() -> None:
 
 =======
     bucket: Dict[str, Dict[str, Dict[int, Dict[str, Any]]]] = {}
+=======
+    bucket: Dict[str, Dict[str, Dict[int, Dict[str, Any]]]] = {}
+>>>>>>> Stashed changes
     frozen_keys_a = phase_keys("A")
     skipped_non_a = 0
 >>>>>>> Stashed changes
@@ -227,6 +269,7 @@ def main() -> None:
 
         for r in data:
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
             if not isinstance(r, dict):
                 continue
 
@@ -236,6 +279,9 @@ def main() -> None:
                 skipped_phase += 1
 =======
             meta = r.get("meta", {}) or {}
+=======
+            meta = r.get("meta", {}) or {}
+>>>>>>> Stashed changes
             ph = str(meta.get("pipeline_phase", "")).upper()
 
             if ph != "A":
@@ -264,6 +310,7 @@ def main() -> None:
 
             for seed, rec in seed_map.items():
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
                 metrics = normalize_metrics(rec)
                 ok, reasons = _passes_filters_verbose(metrics)
 
@@ -284,6 +331,12 @@ def main() -> None:
                         metrics["robust_score_mean"],
                     ])
 
+=======
+                if _passes_rules(rec):
+                    passed_seeds.append(seed)
+                    robust_scores.append(_metric(rec, "robust_score", -1e9))
+
+>>>>>>> Stashed changes
 =======
                 if _passes_rules(rec):
                     passed_seeds.append(seed)
@@ -315,6 +368,7 @@ def main() -> None:
             final.append(p)
 
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
     final.sort(key=lambda x: float(x.get("promotion_score", -1e9)), reverse=True)
     final = final[:TOP_K_PROMOTED]
 
@@ -327,6 +381,13 @@ def main() -> None:
         f"fase{PHASE}_promoted.json"
     )
     with open(out_json, "w", encoding="utf-8") as f:
+=======
+    final.sort(key=lambda x: x["promotion_score"], reverse=True)
+    final = final[:TOP_K_PROMOTED]
+
+    out = os.path.join(OUT_DIR, "faseA_promoted.json")
+    with open(out, "w", encoding="utf-8") as f:
+>>>>>>> Stashed changes
 =======
     final.sort(key=lambda x: x["promotion_score"], reverse=True)
     final = final[:TOP_K_PROMOTED]
@@ -360,6 +421,7 @@ def main() -> None:
 
     print("=========================================")
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
     print(f"[POST] Phase {PHASE} promoted: {len(final)}")
     print(f"[POST] Saved -> {out_json}")
     print(f"[POST] Rejection audit -> {WHY_REJECTED_CSV}")
@@ -367,6 +429,14 @@ def main() -> None:
         print(f"[POST][INFO] Skipped {skipped_seed} files by SEEDS")
     if skipped_phase:
         print(f"[POST][WARN] Skipped {skipped_phase} records from other phases")
+=======
+    print(f"[POST] Promoted candidates: {len(final)}")
+    print(f"[POST] Saved -> {out}")
+    if skipped_seed:
+        print(f"[POST][INFO] Skipped {skipped_seed} files by SEEDS")
+    if skipped_non_a:
+        print(f"[POST][WARN] Skipped {skipped_non_a} non-A records")
+>>>>>>> Stashed changes
 =======
     print(f"[POST] Promoted candidates: {len(final)}")
     print(f"[POST] Saved -> {out}")
@@ -383,8 +453,11 @@ def main() -> None:
         print(f"[POST] Promotion SUCCESS. Ready for next phase.")
 
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
 # -------------------------------------------------
 
+=======
+>>>>>>> Stashed changes
 =======
 >>>>>>> Stashed changes
 if __name__ == "__main__":
@@ -393,8 +466,11 @@ if __name__ == "__main__":
 
 
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
 
 
 
+=======
+>>>>>>> Stashed changes
 =======
 >>>>>>> Stashed changes
