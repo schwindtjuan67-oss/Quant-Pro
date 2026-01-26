@@ -92,6 +92,7 @@ class BacktestRunner:
             def __init__(self, symbol: str):
                 super().__init__(symbol)
                 self.trades = []
+                self.trades_list: List[Dict[str, Any]] = []
                 self.equity_r = 0.0
 
             def log_trade(self, **k):
@@ -103,6 +104,26 @@ class BacktestRunner:
                         r = pnl / risk
                         self.equity_r += r
                         self.trades.append(r)
+                        trade: Dict[str, Any] = {
+                            "type": "EXIT",
+                            "pnl_r": float(r),
+                            "pnl": float(pnl),
+                            "risk_usdt": float(risk),
+                        }
+                        for key in ("timestamp_ms", "ts_ms", "exit_ts_ms", "close_ts_ms"):
+                            if key in k and k[key] not in (None, ""):
+                                trade["timestamp_ms"] = int(float(k[key]))
+                                break
+                        if "timestamp_ms" not in trade:
+                            for key in ("timestamp", "ts", "exit_ts", "close_ts", "open_time"):
+                                if key in k and k[key] not in (None, ""):
+                                    v = int(float(k[key]))
+                                    trade["timestamp_ms"] = v if v >= 10_000_000_000 else v * 1000
+                                    break
+                        for extra in ("holding_time_sec", "symbol"):
+                            if extra in k and k[extra] not in (None, ""):
+                                trade[extra] = k[extra]
+                        self.trades_list.append(trade)
 
         # ---------------- Offline Engine ----------------
         class OfflineEngine:
@@ -184,12 +205,13 @@ class BacktestRunner:
                     print(f"{k:12}: {v}")
 
         # ---------------- Result ----------------
-        trades = len(engine.logger.trades)
+        trades_list = list(engine.logger.trades_list)
+        trades = len(trades_list)
         equity_r = engine.logger.equity_r
 
         return {
             "equity_r": round(float(equity_r), 6),
             "trades": int(trades),
+            "trades_list": trades_list,
             "notes": "BacktestRunner GPU OK" if self.use_gpu else "BacktestRunner CPU OK",
         }
-
