@@ -60,7 +60,7 @@ set OPENBLAS_NUM_THREADS=1
 REM ---------------------------
 REM A
 REM ---------------------------
-set "A_WORKERS=2"
+set "A_WORKERS=4"
 set "A_BATCH_SIZE=32"
 set "A_SAMPLES=300"
 

@@ -325,7 +325,7 @@ def load_candles_from_path(
 
 def make_walk_forward_splits(
     n: int,
-    n_folds: int = 5,
+    n_folds: int = 3,
     min_train: int = 10_000,
     min_test: int = 2_000,
 ) -> List[Tuple[slice, slice]]:
@@ -802,7 +802,7 @@ def run_robust_search(
     backtest_fn: BacktestFn,
     n_samples: int = 200,
     seed: int = 1337,
-    n_folds: int = 5,
+    n_folds: int = 3,
     min_train: int = 10_000,
     min_test: int = 2_000,
     gates: Optional[Dict[str, Any]] = None,
@@ -1525,7 +1525,7 @@ def main():
                 warmup=int(args.warmup),
                 n_samples=int(args.samples),
                 seed=int(args.seed),
-                n_folds=5,
+                n_folds=3,
                 min_train=10_000,
                 min_test=2_000,
                 gates=None,
