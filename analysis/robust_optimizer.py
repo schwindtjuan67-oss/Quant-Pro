@@ -833,6 +833,7 @@ def run_robust_search(
     """
     gates = gates or {
         "min_trades": 30,
+        "min_r_obs": 200,
         "max_dd_r": 20.0,
         "min_pf": 1.05,
         "min_winrate": 0.35,
@@ -1204,6 +1205,7 @@ def save_results_json(path: str, results: List[EvalResult], meta: Optional[Dict[
       - meta con pipeline_phase + space_keys (para auditar qué se sampleó)
     """
     payload = []
+    meta_payload = _normalize_meta(meta)
     for r in results:
         record = {
             "params": r.params,
@@ -1215,7 +1217,7 @@ def save_results_json(path: str, results: List[EvalResult], meta: Optional[Dict[
                 {"fold_id": fr.fold_id, "score": fr.score, "metrics": fr.metrics}
                 for fr in r.fold_results
             ],
-            "meta": meta or {},
+            "meta": meta_payload,
         }
         if r.exception:
             record["exception"] = r.exception
@@ -1223,6 +1225,60 @@ def save_results_json(path: str, results: List[EvalResult], meta: Optional[Dict[
             record["traceback"] = r.traceback
         payload.append(record)
     _atomic_write_json(path, payload)
+
+
+def _normalize_meta(meta: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    if not isinstance(meta, dict):
+        return {}
+    payload = dict(meta)
+    space_keys = payload.get("space_keys")
+    if isinstance(space_keys, list):
+        payload["space_keys"] = sorted({str(k) for k in space_keys})
+    return payload
+
+
+def _parse_env_int(name: str) -> Optional[int]:
+    raw = os.getenv(name, "").strip()
+    if not raw:
+        return None
+    try:
+        return int(raw)
+    except Exception:
+        return None
+
+
+def _resolve_gates(
+    base_cfg: Optional[Dict[str, Any]],
+    cli_min_trades: Optional[int],
+    cli_min_r_obs: Optional[int],
+) -> Dict[str, Any]:
+    gates = {
+        "min_trades": 30,
+        "min_r_obs": 200,
+        "max_dd_r": 20.0,
+        "min_pf": 1.05,
+        "min_winrate": 0.35,
+        "lam_std": 0.75,
+        "beta_worst": 0.35,
+    }
+    if isinstance(base_cfg, dict):
+        base_gates = base_cfg.get("gates")
+        if isinstance(base_gates, dict):
+            gates.update(base_gates)
+
+    env_min_trades = _parse_env_int("PIPELINE_MIN_TRADES")
+    if env_min_trades is not None:
+        gates["min_trades"] = env_min_trades
+    env_min_r_obs = _parse_env_int("PIPELINE_MIN_R_OBS")
+    if env_min_r_obs is not None:
+        gates["min_r_obs"] = env_min_r_obs
+
+    if cli_min_trades is not None:
+        gates["min_trades"] = int(cli_min_trades)
+    if cli_min_r_obs is not None:
+        gates["min_r_obs"] = int(cli_min_r_obs)
+
+    return gates
 
 
 def _atomic_write_json(path: str, payload: Any) -> None:
@@ -1269,6 +1325,7 @@ def run_robust_search_parallel(
 ) -> Tuple[List[EvalResult], List[EvalResult]]:
     gates = gates or {
         "min_trades": 30,
+        "min_r_obs": 200,
         "max_dd_r": 20.0,
         "min_pf": 1.05,
         "min_winrate": 0.35,
@@ -1449,6 +1506,7 @@ def _load_survivor_params(path: str) -> List[Dict[str, Any]]:
 
 
 def _save_survivors(path: str, results: List[EvalResult], meta: Optional[Dict[str, Any]] = None) -> None:
+    meta_payload = _normalize_meta(meta)
     payload = []
     for r in results:
         if not r.passed:
@@ -1461,7 +1519,7 @@ def _save_survivors(path: str, results: List[EvalResult], meta: Optional[Dict[st
                 {"fold_id": fr.fold_id, "score": fr.score, "metrics": fr.metrics}
                 for fr in r.fold_results
             ],
-            "meta": meta or {},
+            "meta": meta_payload,
         })
     _atomic_write_json(path, payload)
 
@@ -1495,6 +1553,8 @@ def main():
     ap.add_argument("--warmup", type=int, default=500, help="candles warmup")
     ap.add_argument("--min-train", type=int, default=10000, help="min candles for train split")
     ap.add_argument("--min-test", type=int, default=2000, help="min candles for test split")
+    ap.add_argument("--min-trades", type=int, default=None, help="override gate min_trades")
+    ap.add_argument("--min-r-obs", type=int, default=None, help="override gate min_r_obs")
 
     # ✅ paralelo (opcionales)
     ap.add_argument("--workers", type=int, default=0, help="workers para paralelo (0=auto/env/disabled)")
@@ -1555,6 +1615,8 @@ def main():
             with open(args.base_config, "r", encoding="utf-8") as f:
                 base_cfg = json.load(f)
             print("[ROBUST] Using REAL backtest function (in-memory).")
+
+        gates = _resolve_gates(base_cfg, args.min_trades, args.min_r_obs)
 
         # resolver workers
         workers = int(args.workers or 0)
@@ -1620,7 +1682,7 @@ def main():
                 n_folds=folds,
                 min_train=int(args.min_train),
                 min_test=int(args.min_test),
-                gates=None,
+                gates=gates,
                 top_k=len(revalidate_params) if revalidate_params else 20,
                 workers=workers,
                 use_dummy=bool(args.use_dummy),
@@ -1639,6 +1701,7 @@ def main():
                 n_folds=folds,
                 min_train=int(args.min_train),
                 min_test=int(args.min_test),
+                gates=gates,
                 window=window_label,
                 params_list=revalidate_params,
             )
@@ -1654,7 +1717,12 @@ def main():
             "batch_size": int(batch_size),
             "folds": int(folds),
             "mode": "revalidate" if revalidate_params else "search",
+            "gates": {
+                "min_trades": int(gates.get("min_trades", 30)),
+                "min_r_obs": int(gates.get("min_r_obs", 200)),
+            },
         })
+        meta = _normalize_meta(meta)
         if revalidate_params:
             passed_results = [r for r in all_results if r.passed]
             save_results_json(out_path, passed_results, meta=meta)
@@ -1670,7 +1738,7 @@ def main():
             "fail_reason": [f"TOPLEVEL_EXCEPTION:{type(e).__name__}"],
             "exception": str(e),
             "traceback": traceback.format_exc(),
-            "meta": meta,
+            "meta": _normalize_meta(meta),
         }
         _atomic_write_json(out_path, err_payload)
         raise
