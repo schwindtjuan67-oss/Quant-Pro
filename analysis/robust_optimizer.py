@@ -369,7 +369,7 @@ def _passes_gates(metrics: Dict[str, float], gates: Dict[str, Any]) -> Tuple[boo
         return False, f"min_pf ({pf:.2f})"
 
     winrate = metrics.get("winrate", 0.0)
-    if winrate < gates.get("min_winrate", 0.35):
+    if winrate < gates["min_winrate"]:
         return False, f"min_winrate ({winrate:.2f})"
 
     return True, ""
@@ -1270,6 +1270,7 @@ def _resolve_gates(
     cli_min_trades: Optional[int],
     cli_min_r_obs: Optional[int],
     cli_min_pf: Optional[float],
+    cli_min_winrate: Optional[float],
 ) -> Dict[str, Any]:
     gates = {
         "min_trades": 30,
@@ -1294,6 +1295,9 @@ def _resolve_gates(
     env_min_pf = _parse_env_float("PIPELINE_MIN_PF")
     if env_min_pf is not None:
         gates["min_pf"] = env_min_pf
+    env_min_winrate = _parse_env_float("PIPELINE_MIN_WINRATE")
+    if env_min_winrate is not None:
+        gates["min_winrate"] = env_min_winrate
 
     if cli_min_trades is not None:
         gates["min_trades"] = int(cli_min_trades)
@@ -1301,6 +1305,8 @@ def _resolve_gates(
         gates["min_r_obs"] = int(cli_min_r_obs)
     if cli_min_pf is not None:
         gates["min_pf"] = float(cli_min_pf)
+    if cli_min_winrate is not None:
+        gates["min_winrate"] = float(cli_min_winrate)
 
     return gates
 
@@ -1580,6 +1586,7 @@ def main():
     ap.add_argument("--min-trades", type=int, default=None, help="override gate min_trades")
     ap.add_argument("--min-r-obs", type=int, default=None, help="override gate min_r_obs")
     ap.add_argument("--min-pf", type=float, default=None, help="override gate min_pf")
+    ap.add_argument("--min-winrate", type=float, default=None, help="override gate min_winrate")
 
     # ✅ paralelo (opcionales)
     ap.add_argument("--workers", type=int, default=0, help="workers para paralelo (0=auto/env/disabled)")
@@ -1641,7 +1648,7 @@ def main():
                 base_cfg = json.load(f)
             print("[ROBUST] Using REAL backtest function (in-memory).")
 
-        gates = _resolve_gates(base_cfg, args.min_trades, args.min_r_obs, args.min_pf)
+        gates = _resolve_gates(base_cfg, args.min_trades, args.min_r_obs, args.min_pf, args.min_winrate)
 
         # resolver workers
         workers = int(args.workers or 0)
@@ -1746,6 +1753,7 @@ def main():
                 "min_trades": int(gates.get("min_trades", 30)),
                 "min_r_obs": int(gates.get("min_r_obs", 200)),
                 "min_pf": float(gates.get("min_pf", 1.05)),
+                "min_winrate": float(gates.get("min_winrate", 0.35)),
             },
         })
         meta = _normalize_meta(meta)
