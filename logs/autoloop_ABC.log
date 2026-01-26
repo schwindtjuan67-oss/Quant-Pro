@@ -39834,4 +39834,24 @@ WINDOWS=2019-01_2020-12 2021-01_2021-12 2022-01_2023-06
 [ROBUST] data size = 203752
 [ROBUST] Using REAL backtest function (in-memory).
 [ROBUST] Parallel enabled: workers=2 (spawn-safe) batch_size=16
+^C=====================================================
+[BOOT] 26/01/2026  7:23:00,79
+ROOT=C:\Users\PC\Documents\GitHub\Quant-Pro
+DATA=datasets\SOLUSDT\1m
+WINDOWS=2019-01_2020-12 2021-01_2021-12 2022-01_2023-06
+=====================================================
+[END] 26/01/2026  7:23:01,08
+=====================================================
+[BOOT] 26/01/2026  7:23:03,59
+ROOT=C:\Users\PC\Documents\GitHub\Quant-Pro
+DATA=datasets\SOLUSDT\1m
+WINDOWS=2019-01_2020-12 2021-01_2021-12 2022-01_2023-06
+=====================================================
+[CYCLE] seed_base=5983 seeds=5983 5984 5985
+[ROBUST] window=2019-01_2020-12 seed=5983 out=results\robust\robust_2019-01_2020-12_seed5983.json
+[ROBUST] loading dataset...
+[ROBUST] date_from=2019-01-01 date_to=2020-12-31 window='2019-01_2020-12'
+[ROBUST] data size = 203752
+[ROBUST] Using REAL backtest function (in-memory).
+[ROBUST] Parallel enabled: workers=2 (spawn-safe) batch_size=16
 ^C
