@@ -419,6 +419,15 @@ def aggregate_fold_scores(
     return mean_s - lam_std * std_s + beta_worst * worst_s
 
 
+def _apply_score_fallback(score: float, metrics: Dict[str, float], mode: str) -> float:
+    if score <= -1e9 or score == -1000000000.0:
+        if mode == "equity":
+            return float(metrics.get("equity_r", score))
+        if mode == "expectancy":
+            return float(metrics.get("expectancy", score))
+    return score
+
+
 def evaluate_params_walk_forward(
     data: Any,
     params: Dict[str, Any],
@@ -427,6 +436,7 @@ def evaluate_params_walk_forward(
     gates: Dict[str, Any],
     test_slices: Optional[List[Any]] = None,
     feature_caches: Optional[List[FeatureCache]] = None,
+    score_fallback: str = "none",
 ) -> EvalResult:
     fold_results: List[FoldResult] = []
     passed = True
@@ -441,6 +451,7 @@ def evaluate_params_walk_forward(
         m = compute_metrics_from_trades(trades_test)
         ok, reasons = check_filters(m, gates)
         s = compute_score(m)
+        s = _apply_score_fallback(s, m, score_fallback)
 
         fold_results.append(FoldResult(fold_id=i, metrics=m, score=s))
         if not ok:
@@ -579,6 +590,7 @@ _WORKER_WARMUP: int = 500
 _WORKER_GATES: Dict[str, Any] = {}
 _WORKER_SPLITS: List[Tuple[slice, slice]] = []
 _WORKER_USE_DUMMY: bool = False
+_WORKER_SCORE_FALLBACK: str = "none"
 
 # ✅ NUEVO: slice cache por worker (lista de test_slices ya materializados)
 _WORKER_TEST_SLICES: Optional[List[Any]] = None  # Any para permitir list/slice/np/etc
@@ -594,9 +606,10 @@ def _worker_init(
     gates: Dict[str, Any],
     splits: List[Tuple[slice, slice]],
     use_dummy: bool,
+    score_fallback: str,
 ):
     # Se ejecuta 1 vez por proceso
-    global _WORKER_DATA, _WORKER_BASE_CFG, _WORKER_SYMBOL, _WORKER_INTERVAL, _WORKER_WARMUP, _WORKER_GATES, _WORKER_SPLITS, _WORKER_USE_DUMMY, _WORKER_TEST_SLICES, _WORKER_FEATURE_CACHES
+    global _WORKER_DATA, _WORKER_BASE_CFG, _WORKER_SYMBOL, _WORKER_INTERVAL, _WORKER_WARMUP, _WORKER_GATES, _WORKER_SPLITS, _WORKER_USE_DUMMY, _WORKER_TEST_SLICES, _WORKER_FEATURE_CACHES, _WORKER_SCORE_FALLBACK
     _WORKER_DATA = data
     _WORKER_BASE_CFG = base_cfg
     _WORKER_SYMBOL = symbol
@@ -605,6 +618,7 @@ def _worker_init(
     _WORKER_GATES = gates or {}
     _WORKER_SPLITS = splits or []
     _WORKER_USE_DUMMY = bool(use_dummy)
+    _WORKER_SCORE_FALLBACK = score_fallback
 
     # ✅ Slice cache (reduce overhead de slicing repetido por param)
     try:
@@ -647,7 +661,7 @@ def _worker_backtest_fn(data_slice: Any, params: Dict[str, Any]) -> List[Dict[st
 def _evaluate_params_on_cached_test_slices(
     params: Dict[str, Any],
 ) -> Dict[str, Any]:
-    global _WORKER_TEST_SLICES, _WORKER_GATES, _WORKER_FEATURE_CACHES
+    global _WORKER_TEST_SLICES, _WORKER_GATES, _WORKER_FEATURE_CACHES, _WORKER_SCORE_FALLBACK
 
     if _WORKER_TEST_SLICES is None:
         # fallback a la vieja vía (no debería si init pudo cachear)
@@ -666,6 +680,7 @@ def _evaluate_params_on_cached_test_slices(
             m = compute_metrics_from_trades(trades_test)
             ok, reasons = check_filters(m, _WORKER_GATES)
             s = compute_score(m)
+            s = _apply_score_fallback(s, m, _WORKER_SCORE_FALLBACK)
 
             fold_results.append(FoldResult(fold_id=i, metrics=m, score=s))
             if not ok:
@@ -727,6 +742,7 @@ def _worker_eval_one(params: Dict[str, Any]) -> Dict[str, Any]:
             backtest_fn=_worker_backtest_fn,
             splits=_WORKER_SPLITS,
             gates=_WORKER_GATES,
+            score_fallback=_WORKER_SCORE_FALLBACK,
         )
     except MemoryError:
         # 🔴 OOM explícito
@@ -826,6 +842,7 @@ def run_robust_search(
     top_k: int = 20,
     window: Optional[str] = None,
     params_list: Optional[List[Dict[str, Any]]] = None,
+    score_fallback: str = "none",
 ) -> Tuple[List[EvalResult], List[EvalResult]]:
     """
     Mantiene compat total.
@@ -907,6 +924,7 @@ def run_robust_search(
                     gates=gates,
                     test_slices=test_slices,
                     feature_caches=feature_caches,
+                    score_fallback=score_fallback,
                 )
                 results.append(er)
             except Exception as e:
@@ -996,6 +1014,7 @@ def run_robust_search(
             gates,
             splits,
             use_dummy,
+            score_fallback,
         ),
     ) as ex:
         # ============================================================
@@ -1352,6 +1371,7 @@ def run_robust_search_parallel(
     batch_size: int = 8,  # ✅ NUEVO: batch params
     window: Optional[str] = None,
     params_list: Optional[List[Dict[str, Any]]] = None,
+    score_fallback: str = "none",
 ) -> Tuple[List[EvalResult], List[EvalResult]]:
     gates = gates or {
         "min_trades": 30,
@@ -1406,7 +1426,7 @@ def run_robust_search_parallel(
         max_workers=max(1, int(workers)),
         mp_context=ctx,
         initializer=_worker_init,
-        initargs=(data, base_cfg, symbol, interval, int(warmup), gates, splits, bool(use_dummy)),
+        initargs=(data, base_cfg, symbol, interval, int(warmup), gates, splits, bool(use_dummy), score_fallback),
     ) as ex:
         if batch_size == 1:
             futs = [ex.submit(_evaluate_params_on_cached_test_slices, p) for p in params_list]
@@ -1561,7 +1581,7 @@ def _save_survivors(path: str, results: List[EvalResult], meta: Optional[Dict[st
 def main():
     ap = argparse.ArgumentParser("robust_optimizer")
     ap.add_argument("--data", required=True, help="dataset path (folder with CSVs)")
-    ap.add_argument("--out", required=True, help="output json")
+    ap.add_argument("--out", default=None, help="output json")
     ap.add_argument("--samples", type=int, default=200)
     ap.add_argument("--seed", type=int, default=1337)
     ap.add_argument("--folds", type=int, default=3, help="folds walk-forward (SEARCH default=3, REVALIDATE recomendado=5)")
@@ -1596,11 +1616,11 @@ def main():
     ap.add_argument("--batch-size", type=int, default=0, help="batch params por task (0=auto/env default 8)")
     ap.add_argument("--save-survivors", default=None, help="path JSON para guardar survivors (SEARCH)")
     ap.add_argument("--revalidate", default=None, help="path JSON con survivors para revalidar (solo evalúa esos params)")
+    ap.add_argument("--score-fallback", choices=("none", "equity", "expectancy"), default="none")
 
     args = ap.parse_args()
 
-    out_path = args.out
-    os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
+    out_path = (args.out or "").strip()
     meta: Dict[str, Any] = {
         "symbol": args.symbol,
         "interval": args.interval,
@@ -1609,6 +1629,7 @@ def main():
         "samples": int(args.samples),
         "min_train": int(args.min_train),
         "min_test": int(args.min_test),
+        "score_fallback": args.score_fallback,
     }
 
     try:
@@ -1621,6 +1642,12 @@ def main():
             raise SystemExit("[ROBUST] Missing date range. Provide --window OR (--from-date AND --to-date).")
 
         window_label = args.window or f"{date_from[:7]}_{date_to[:7]}"
+        out_path = (args.out or "").strip()
+        if out_path:
+            os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
+        else:
+            out_path = os.path.join("results", "robust", f"robust_{window_label}_seed{int(args.seed)}.json")
+            os.makedirs(os.path.dirname(out_path), exist_ok=True)
 
         print("[ROBUST] loading dataset...")
         print(f"[ROBUST] date_from={date_from} date_to={date_to} window={args.window!r}")
@@ -1721,6 +1748,7 @@ def main():
                 batch_size=int(batch_size),
                 window=window_label,
                 params_list=revalidate_params,
+                score_fallback=args.score_fallback,
             )
         else:
             if workers > 1 and args.use_dummy:
@@ -1736,6 +1764,7 @@ def main():
                 gates=gates,
                 window=window_label,
                 params_list=revalidate_params,
+                score_fallback=args.score_fallback,
             )
 
         print(f"[ROBUST] finished, top={len(top_results)}")
@@ -1767,6 +1796,9 @@ def main():
         print(f"[ROBUST] saved -> {out_path}")
     except Exception as e:
         import traceback
+        if not out_path:
+            out_path = os.path.join("results", "robust", f"robust_error_seed{int(args.seed)}.json")
+            os.makedirs(os.path.dirname(out_path), exist_ok=True)
         err_payload = {
             "passed": False,
             "fail_reason": [f"TOPLEVEL_EXCEPTION:{type(e).__name__}"],
