@@ -31,6 +31,7 @@ from Live.event_bus import EventBus
 
 from strategies.trend_risk_tools import TrendRiskModule
 from strategies.vwap_tools import VWAPModule
+from analysis.feature_cache import get_active_cache
 
 # ============================================================
 # GPU FEATURES (IMG1) — HOOK 100% (ATR / VWAP / ROLLING MEANS)
@@ -842,6 +843,17 @@ class HybridScalperPRO:
         # ============================================================
         # GPU HOOK (IMG1): VWAP simple
         # ============================================================
+        cache = get_active_cache()
+        idx = getattr(self, "_last_cache_idx", None)
+        if cache is not None and idx is not None:
+            try:
+                vwap_arr = cache.vwap(window)
+                if 0 <= idx < len(vwap_arr):
+                    vwap_val = float(vwap_arr[idx])
+                    if np.isfinite(vwap_val):
+                        return vwap_val
+            except Exception:
+                pass
         if getattr(self, "gpu", None) is not None:
             try:
                 return float(self.gpu.vwap(window))
@@ -1359,14 +1371,65 @@ class HybridScalperPRO:
         self.last_candle_ts = ts
 
         # 2) indicadores base
+        cache = get_active_cache()
+        idx = candle.get("_idx", None)
+        use_cache = cache is not None and idx is not None
+        if use_cache:
+            try:
+                idx = int(idx)
+                if idx < 0:
+                    use_cache = False
+            except Exception:
+                use_cache = False
+
         self._append_ohlcv(o, h, l, c, v)
-        self._update_atr(h, l, c)
-        long_cross, short_cross = self._update_ema(c)
+        if use_cache:
+            self._last_cache_idx = idx
+            ema_fast_arr = cache.ema(self.EMA_FAST)
+            ema_slow_arr = cache.ema(self.EMA_SLOW)
+            atr_arr = cache.atr(self.ATR_N)
+
+            if 0 <= idx < len(ema_fast_arr) and np.isfinite(ema_fast_arr[idx]):
+                self.ema_fast = float(ema_fast_arr[idx])
+            if 0 <= idx < len(ema_slow_arr) and np.isfinite(ema_slow_arr[idx]):
+                self.ema_slow = float(ema_slow_arr[idx])
+            if 0 <= idx < len(atr_arr) and np.isfinite(atr_arr[idx]):
+                self.atr = float(atr_arr[idx])
+
+            long_cross = bool(self.ema_fast is not None and self.ema_slow is not None and self.ema_fast > self.ema_slow)
+            short_cross = bool(self.ema_fast is not None and self.ema_slow is not None and self.ema_fast < self.ema_slow)
+        else:
+            self._update_atr(h, l, c)
+            long_cross, short_cross = self._update_ema(c)
 
         if self.atr is None:
             return
 
-        trend_long_ok, trend_short_ok, vwap_long_ok, vwap_short_ok = self._filters_trend_vwap()
+        if use_cache:
+            trend_long_ok = bool(self.ema_fast is not None and self.ema_slow is not None and self.ema_fast > self.ema_slow)
+            trend_short_ok = bool(self.ema_fast is not None and self.ema_slow is not None and self.ema_fast < self.ema_slow)
+
+            vwap_arr = cache.vwap(self.VWAP_WINDOW)
+            if 0 <= idx < len(vwap_arr) and np.isfinite(vwap_arr[idx]):
+                vwap_now = float(vwap_arr[idx])
+                strict = bool(getattr(self.vwap_module, "strict", True))
+                prev_close = None
+                prev_vwap = None
+                if idx >= 1 and idx - 1 < len(cache.close):
+                    prev_close = float(cache.close[idx - 1])
+                    prev_vwap = float(vwap_arr[idx - 1])
+                if prev_close is not None and prev_vwap is not None and np.isfinite(prev_vwap):
+                    cross_up = (prev_close < prev_vwap) and (c > vwap_now)
+                    cross_dn = (prev_close > prev_vwap) and (c < vwap_now)
+                else:
+                    cross_up = c > vwap_now
+                    cross_dn = c < vwap_now
+                vwap_long_ok = cross_up if strict else (c > vwap_now)
+                vwap_short_ok = cross_dn if strict else (c < vwap_now)
+            else:
+                trend_long_ok, trend_short_ok, vwap_long_ok, vwap_short_ok = self._filters_trend_vwap()
+        else:
+            trend_long_ok, trend_short_ok, vwap_long_ok, vwap_short_ok = self._filters_trend_vwap()
 
         snap = self._get_delta_snapshot()
         delta_long_ok = self._delta_allows_long(snap)
