@@ -1200,30 +1200,38 @@ def run_robust_search(
 def save_results_json(path: str, results: List[EvalResult], meta: Optional[Dict[str, Any]] = None) -> None:
     """Guarda resultados robust.
 
-    Nota: mantenemos compat hacia atrás (lista de dicts), pero agregamos:
+    Nota: mantenemos compat hacia atrás (dict con arrays), pero agregamos:
       - robust_score en el nivel raíz (para que post-analysis no dependa de agg)
       - meta con pipeline_phase + space_keys (para auditar qué se sampleó)
     """
-    payload = []
     meta_payload = _normalize_meta(meta)
+    payload: Dict[str, Any] = {
+        "params": [],
+        "passed": [],
+        "fail_reason": [],
+        "robust_score": [],
+        "agg": [],
+        "folds": [],
+        "meta": meta_payload,
+    }
+    exceptions: List[str] = []
+    tracebacks: List[str] = []
     for r in results:
-        record = {
-            "params": r.params,
-            "passed": r.passed,
-            "fail_reason": r.fail_reason,
-            "robust_score": r.robust_score,
-            "agg": r.agg,
-            "folds": [
-                {"fold_id": fr.fold_id, "score": fr.score, "metrics": fr.metrics}
-                for fr in r.fold_results
-            ],
-            "meta": meta_payload,
-        }
-        if r.exception:
-            record["exception"] = r.exception
-        if r.traceback:
-            record["traceback"] = r.traceback
-        payload.append(record)
+        payload["params"].append(r.params)
+        payload["passed"].append(r.passed)
+        payload["fail_reason"].append(r.fail_reason)
+        payload["robust_score"].append(r.robust_score)
+        payload["agg"].append(r.agg)
+        payload["folds"].append([
+            {"fold_id": fr.fold_id, "score": fr.score, "metrics": fr.metrics}
+            for fr in r.fold_results
+        ])
+        exceptions.append(r.exception or "")
+        tracebacks.append(r.traceback or "")
+    if any(exceptions):
+        payload["exception"] = exceptions
+    if any(tracebacks):
+        payload["traceback"] = tracebacks
     _atomic_write_json(path, payload)
 
 
