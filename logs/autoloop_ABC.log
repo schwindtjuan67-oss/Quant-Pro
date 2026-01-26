@@ -39976,4 +39976,20 @@ WINDOWS=2020-09_2020-12 2021-01_2021-12 2022-01_2023-06
 [ROBUST][HB] done=32/294 passed=0 failed=32 elapsed=00:00:38 rate=0.82 params/s window=2020-09_2020-12 seed=6000 top_fails: fold 0: min_trades (1)=32, fold 1: min_trades (1)=32, fold 2: min_trades (1)=32
 [ROBUST][HB] done=96/294 passed=0 failed=96 elapsed=00:01:17 rate=1.25 params/s window=2020-09_2020-12 seed=6000 top_fails: fold 0: min_trades (1)=96, fold 1: min_trades (1)=96, fold 2: min_trades (1)=96
 [ROBUST][HB] done=160/294 passed=0 failed=160 elapsed=00:01:55 rate=1.39 params/s window=2020-09_2020-12 seed=6000 top_fails: fold 0: min_trades (1)=160, fold 1: min_trades (1)=160, fold 2: min_trades (1)=160
+^C=====================================================
+[BOOT] 26/01/2026 12:22:22,02
+ROOT=C:\Users\PC\Documents\GitHub\Quant-Pro
+DATA=datasets\SOLUSDT\1m
+WINDOWS=2020-09_2020-12 2021-01_2021-12 2022-01_2023-06
+=====================================================
+[CYCLE] seed_base=6001 seeds=6001 6002 6003
+[ROBUST] window=2020-09_2020-12 seed=6002 out=results\robust\robust_2020-09_2020-12_seed6002.json
+[ROBUST] loading dataset...
+[ROBUST] date_from=2020-09-01 date_to=2020-12-31 window='2020-09_2020-12'
+[ROBUST] data size = 173872
+[ROBUST] Using REAL backtest function (in-memory).
+[ROBUST] Parallel enabled: workers=2 (spawn-safe) batch_size=32
+[ROBUST][HB] done=32/292 passed=0 failed=32 elapsed=00:00:39 rate=0.80 params/s window=2020-09_2020-12 seed=6002 top_fails: fold 0: min_trades (1)=32, fold 1: min_trades (1)=32, fold 2: min_trades (1)=32
+[ROBUST][HB] done=96/292 passed=0 failed=96 elapsed=00:01:18 rate=1.22 params/s window=2020-09_2020-12 seed=6002 top_fails: fold 0: min_trades (1)=96, fold 1: min_trades (1)=96, fold 2: min_trades (1)=96
+[ROBUST][HB] done=160/292 passed=0 failed=160 elapsed=00:01:57 rate=1.37 params/s window=2020-09_2020-12 seed=6002 top_fails: fold 0: min_trades (1)=160, fold 1: min_trades (1)=160, fold 2: min_trades (1)=160
 ^C
