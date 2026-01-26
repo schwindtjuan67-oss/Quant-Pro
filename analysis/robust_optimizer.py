@@ -21,6 +21,7 @@ import multiprocessing as mp
 import tempfile
 from dataclasses import dataclass
 from datetime import datetime, timezone
+import time
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import numpy as np
@@ -103,6 +104,39 @@ def _pick_ts_ms(c: Dict[str, Any]) -> Optional[int]:
         if k in c and c[k] not in (None, ""):
             return _coerce_ts_to_ms(c[k])
     return None
+
+
+def _format_elapsed_hms(seconds: float) -> str:
+    total = int(seconds)
+    hours = total // 3600
+    minutes = (total % 3600) // 60
+    secs = total % 60
+    return f"{hours:02d}:{minutes:02d}:{secs:02d}"
+
+
+def _emit_heartbeat(
+    done_params: int,
+    total_params: int,
+    passed_params: int,
+    failed_params: int,
+    started_at: float,
+    last_emit_at: float,
+    window_label: str,
+    seed: int,
+) -> float:
+    now = time.monotonic()
+    if (now - last_emit_at) < 30.0:
+        return last_emit_at
+    elapsed = now - started_at
+    rate = (done_params / elapsed) if elapsed > 0 else 0.0
+    msg = (
+        f"[ROBUST][HB] done={done_params}/{total_params} "
+        f"passed={passed_params} failed={failed_params} "
+        f"elapsed={_format_elapsed_hms(elapsed)} "
+        f"rate={rate:.2f} params/s window={window_label} seed={seed}"
+    )
+    print(msg, flush=True)
+    return now
 
 
 # ============================================================
@@ -711,6 +745,7 @@ def run_robust_search(
     min_test: int = 2_000,
     gates: Optional[Dict[str, Any]] = None,
     top_k: int = 20,
+    window: Optional[str] = None,
 ) -> List[EvalResult]:
     """
     Mantiene compat total.
@@ -760,6 +795,13 @@ def run_robust_search(
     # Si workers<=1 -> secuencial (idéntico a tu lógica actual)
     if workers <= 1:
         results: List[EvalResult] = []
+        done_params = 0
+        total_params = len(params_list)
+        passed_params = 0
+        failed_params = 0
+        hb_started_at = time.monotonic()
+        hb_last_emit = hb_started_at
+        window_label = window or "unknown"
         for params in params_list:
             try:
                 er = evaluate_params_walk_forward(
@@ -783,6 +825,21 @@ def run_robust_search(
                     exception=str(e),
                     traceback=tb,
                 ))
+            done_params += 1
+            if results[-1].passed:
+                passed_params += 1
+            else:
+                failed_params += 1
+            hb_last_emit = _emit_heartbeat(
+                done_params,
+                total_params,
+                passed_params,
+                failed_params,
+                hb_started_at,
+                hb_last_emit,
+                window_label,
+                int(seed),
+            )
 
         results.sort(
             key=lambda r: (r.robust_score, r.agg.get("score_worst", -1e9), -r.agg.get("score_std", 1e9)),
@@ -850,6 +907,11 @@ def run_robust_search(
 
         done_params = 0
         total_params = len(params_list)
+        passed_params = 0
+        failed_params = 0
+        hb_started_at = time.monotonic()
+        hb_last_emit = hb_started_at
+        window_label = window or "unknown"
 
         for fut in as_completed(futs):
             try:
@@ -859,9 +921,16 @@ def run_robust_search(
                 if isinstance(res, list):
                     results_payloads.extend(res)
                     done_params += len(res)
+                    passed_in_batch = sum(1 for item in res if item.get("passed"))
+                    passed_params += passed_in_batch
+                    failed_params += len(res) - passed_in_batch
                 else:
                     results_payloads.append(res)
                     done_params += 1
+                    if res.get("passed"):
+                        passed_params += 1
+                    else:
+                        failed_params += 1
 
             except FuturesTimeoutError:
                 # Timeout: si era batch, marcamos todos los params del batch
@@ -877,6 +946,7 @@ def run_robust_search(
                             "folds": [],
                         })
                     done_params += len(b)
+                    failed_params += len(b)
                 else:
                     results_payloads.append({
                         "params": {},
@@ -887,6 +957,7 @@ def run_robust_search(
                         "folds": [],
                     })
                     done_params += 1
+                    failed_params += 1
 
             except Exception as e:
                 import traceback
@@ -906,6 +977,7 @@ def run_robust_search(
                             "folds": [],
                         })
                     done_params += len(b)
+                    failed_params += len(b)
                 else:
                     results_payloads.append({
                         "params": {},
@@ -918,9 +990,20 @@ def run_robust_search(
                         "folds": [],
                     })
                     done_params += 1
+                    failed_params += 1
 
             if progress_every > 0 and (done_params % progress_every == 0):
                 print(f"[ROBUST][PAR] done {done_params}/{total_params} (batch_size={batch_size})")
+            hb_last_emit = _emit_heartbeat(
+                done_params,
+                total_params,
+                passed_params,
+                failed_params,
+                hb_started_at,
+                hb_last_emit,
+                window_label,
+                int(seed),
+            )
 
     # Convertir payloads -> EvalResult (misma API)
     results: List[EvalResult] = []
@@ -1018,6 +1101,7 @@ def run_robust_search_parallel(
     workers: int,
     use_dummy: bool = False,
     batch_size: int = 8,  # ✅ NUEVO: batch params
+    window: Optional[str] = None,
 ) -> List[EvalResult]:
     gates = gates or {
         "min_trades": 30,
@@ -1059,6 +1143,11 @@ def run_robust_search_parallel(
         batch_size = 1
 
     results_payloads: List[Dict[str, Any]] = []
+    passed_params = 0
+    failed_params = 0
+    hb_started_at = time.monotonic()
+    hb_last_emit = hb_started_at
+    window_label = window or "unknown"
     with ProcessPoolExecutor(
         max_workers=max(1, int(workers)),
         mp_context=ctx,
@@ -1070,9 +1159,24 @@ def run_robust_search_parallel(
             done = 0
             for fut in as_completed(futs):
                 done += 1
-                results_payloads.append(fut.result())
+                res = fut.result()
+                results_payloads.append(res)
+                if res.get("passed"):
+                    passed_params += 1
+                else:
+                    failed_params += 1
                 if progress_every > 0 and (done % progress_every == 0):
                     print(f"[ROBUST][PAR] done {done}/{len(futs)}")
+                hb_last_emit = _emit_heartbeat(
+                    done,
+                    len(futs),
+                    passed_params,
+                    failed_params,
+                    hb_started_at,
+                    hb_last_emit,
+                    window_label,
+                    int(seed),
+                )
         else:
             batches: List[List[Dict[str, Any]]] = []
             for i in range(0, len(params_list), batch_size):
@@ -1086,9 +1190,22 @@ def run_robust_search_parallel(
                 batch_payloads = fut.result()
                 for pl in batch_payloads:
                     results_payloads.append(pl)
+                passed_in_batch = sum(1 for item in batch_payloads if item.get("passed"))
                 done_params += len(batch_payloads)
+                passed_params += passed_in_batch
+                failed_params += len(batch_payloads) - passed_in_batch
                 if progress_every > 0 and (done_params % progress_every == 0):
                     print(f"[ROBUST][PAR] done {done_params}/{total_params} (batch_size={batch_size})")
+                hb_last_emit = _emit_heartbeat(
+                    done_params,
+                    total_params,
+                    passed_params,
+                    failed_params,
+                    hb_started_at,
+                    hb_last_emit,
+                    window_label,
+                    int(seed),
+                )
 
     # payloads -> EvalResult
     results: List[EvalResult] = []
@@ -1172,6 +1289,8 @@ def main():
 
         if not date_from or not date_to:
             raise SystemExit("[ROBUST] Missing date range. Provide --window OR (--from-date AND --to-date).")
+
+        window_label = args.window or f"{date_from[:7]}_{date_to[:7]}"
 
         print("[ROBUST] loading dataset...")
         print(f"[ROBUST] date_from={date_from} date_to={date_to} window={args.window!r}")
@@ -1261,6 +1380,7 @@ def main():
                 workers=workers,
                 use_dummy=bool(args.use_dummy),
                 batch_size=int(batch_size),
+                window=window_label,
             )
         else:
             if workers > 1 and args.use_dummy:
@@ -1270,6 +1390,7 @@ def main():
                 backtest_fn=backtest_fn,
                 n_samples=args.samples,
                 seed=args.seed,
+                window=window_label,
             )
 
         print(f"[ROBUST] finished, top={len(results)}")
@@ -1299,5 +1420,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
