@@ -365,7 +365,7 @@ def _passes_gates(metrics: Dict[str, float], gates: Dict[str, Any]) -> Tuple[boo
         return False, f"max_dd_r ({max_dd:.2f})"
 
     pf = metrics.get("profit_factor", 0.0)
-    if pf < gates.get("min_pf", 1.05):
+    if pf < gates["min_pf"]:
         return False, f"min_pf ({pf:.2f})"
 
     winrate = metrics.get("winrate", 0.0)
@@ -1255,10 +1255,21 @@ def _parse_env_int(name: str) -> Optional[int]:
         return None
 
 
+def _parse_env_float(name: str) -> Optional[float]:
+    raw = os.getenv(name, "").strip()
+    if not raw:
+        return None
+    try:
+        return float(raw)
+    except Exception:
+        return None
+
+
 def _resolve_gates(
     base_cfg: Optional[Dict[str, Any]],
     cli_min_trades: Optional[int],
     cli_min_r_obs: Optional[int],
+    cli_min_pf: Optional[float],
 ) -> Dict[str, Any]:
     gates = {
         "min_trades": 30,
@@ -1280,11 +1291,16 @@ def _resolve_gates(
     env_min_r_obs = _parse_env_int("PIPELINE_MIN_R_OBS")
     if env_min_r_obs is not None:
         gates["min_r_obs"] = env_min_r_obs
+    env_min_pf = _parse_env_float("PIPELINE_MIN_PF")
+    if env_min_pf is not None:
+        gates["min_pf"] = env_min_pf
 
     if cli_min_trades is not None:
         gates["min_trades"] = int(cli_min_trades)
     if cli_min_r_obs is not None:
         gates["min_r_obs"] = int(cli_min_r_obs)
+    if cli_min_pf is not None:
+        gates["min_pf"] = float(cli_min_pf)
 
     return gates
 
@@ -1563,6 +1579,7 @@ def main():
     ap.add_argument("--min-test", type=int, default=2000, help="min candles for test split")
     ap.add_argument("--min-trades", type=int, default=None, help="override gate min_trades")
     ap.add_argument("--min-r-obs", type=int, default=None, help="override gate min_r_obs")
+    ap.add_argument("--min-pf", type=float, default=None, help="override gate min_pf")
 
     # ✅ paralelo (opcionales)
     ap.add_argument("--workers", type=int, default=0, help="workers para paralelo (0=auto/env/disabled)")
@@ -1624,7 +1641,7 @@ def main():
                 base_cfg = json.load(f)
             print("[ROBUST] Using REAL backtest function (in-memory).")
 
-        gates = _resolve_gates(base_cfg, args.min_trades, args.min_r_obs)
+        gates = _resolve_gates(base_cfg, args.min_trades, args.min_r_obs, args.min_pf)
 
         # resolver workers
         workers = int(args.workers or 0)
@@ -1728,6 +1745,7 @@ def main():
             "gates": {
                 "min_trades": int(gates.get("min_trades", 30)),
                 "min_r_obs": int(gates.get("min_r_obs", 200)),
+                "min_pf": float(gates.get("min_pf", 1.05)),
             },
         })
         meta = _normalize_meta(meta)
