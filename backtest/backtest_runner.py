@@ -9,6 +9,11 @@ RUN_MODE = os.getenv("RUN_MODE", "LIVE").upper().strip()
 PIPELINE_VERBOSE_DIAGNOSTICS = os.getenv("PIPELINE_VERBOSE_DIAGNOSTICS", "0").strip().lower() in ("1", "true", "yes")
 PIPELINE_DISABLE_GPU = RUN_MODE == "PIPELINE" and os.getenv("PIPELINE_DISABLE_GPU", "0").strip().lower() in ("1", "true", "yes")
 
+def _bt_print(msg: str) -> None:
+    # En PIPELINE default = silencioso. Opt-in con PIPELINE_VERBOSE_DIAGNOSTICS=1
+    if RUN_MODE != "PIPELINE" or PIPELINE_VERBOSE_DIAGNOSTICS:
+        print(msg)
+
 # ------------------------------------------------------------
 # GPU feeder (opcional)
 # ------------------------------------------------------------
@@ -67,11 +72,11 @@ class BacktestRunner:
 
         # ---------------- sanity ----------------
         if len(self.candles) == 0:
-            print("[WARN] BacktestRunner: candles=0")
+            _bt_print("[WARN] BacktestRunner: candles=0")
             return {"equity_r": 0.0, "trades": 0, "notes": "candles=0"}
 
         if len(self.candles) <= self.warmup:
-            print("[WARN] BacktestRunner: candles <= warmup")
+            _bt_print("[WARN] BacktestRunner: candles <= warmup")
             return {"equity_r": 0.0, "trades": 0, "notes": "candles<=warmup"}
 
         # ---------------- Delta (opcional) ----------------
@@ -147,11 +152,12 @@ class BacktestRunner:
         live_candles = self.candles[self.warmup :]
 
         # ---------------- MAIN LOOP ----------------
+        # (extra safety, aunque ya está contemplado en __init__)
         if self.use_gpu and PIPELINE_DISABLE_GPU:
             self.use_gpu = False
 
         if self.use_gpu:
-            print("[BACKTEST] GPUCandleFeeder ENABLED")
+            _bt_print("[BACKTEST] GPUCandleFeeder ENABLED")
             feeder = GPUCandleFeeder(
                 batch_size=self.gpu_batch_size,
                 use_gpu=True,
@@ -162,7 +168,7 @@ class BacktestRunner:
                 on_bar=engine.on_new_candle,
             )
         else:
-            print("[BACKTEST] CPU loop")
+            _bt_print("[BACKTEST] CPU loop")
             for c in live_candles:
                 engine.on_new_candle(c)
 
@@ -186,3 +192,4 @@ class BacktestRunner:
             "trades": int(trades),
             "notes": "BacktestRunner GPU OK" if self.use_gpu else "BacktestRunner CPU OK",
         }
+

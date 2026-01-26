@@ -53,11 +53,15 @@ set "LOCK_FILE=results\AUTOLOOP.lock"
 set "LOCK_STALE_MIN=120"
 set "STOP_FILE=results\STOP_AUTOLOOP.txt"
 
+set OMP_NUM_THREADS=1
+set MKL_NUM_THREADS=1
+set OPENBLAS_NUM_THREADS=1
+
 REM ---------------------------
 REM A
 REM ---------------------------
-set "A_WORKERS=3"
-set "A_BATCH_SIZE=4"
+set "A_WORKERS=2"
+set "A_BATCH_SIZE=16"
 set "A_SAMPLES=300"
 
 REM ---------------------------
@@ -156,7 +160,7 @@ REM =========================
 REM FASE A — ROBUST
 REM =========================
 set "PIPELINE_PHASE=A"
-set "PIPELINE_DISABLE_GPU=1"
+set "PIPELINE_DISABLE_GPU=0"
 
 for %%W in (%WINDOWS%) do (
   for %%S in (%SEEDS%) do (
