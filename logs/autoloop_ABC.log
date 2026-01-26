@@ -39894,4 +39894,44 @@ WINDOWS=2020-09_2020-12 2021-01_2021-12 2022-01_2023-06
 [ROBUST] data size = 173872
 [ROBUST] Using REAL backtest function (in-memory).
 [ROBUST] Parallel enabled: workers=2 (spawn-safe) batch_size=32
+^C=====================================================
+[BOOT] 26/01/2026  7:45:39,00
+ROOT=C:\Users\PC\Documents\GitHub\Quant-Pro
+DATA=datasets\SOLUSDT\1m
+WINDOWS=2020-09_2020-12 2021-01_2021-12 2022-01_2023-06
+=====================================================
+[CYCLE] seed_base=5992 seeds=5992 5993 5994
+[ROBUST] window=2020-09_2020-12 seed=5992 out=results\robust\robust_2020-09_2020-12_seed5992.json
+[ROBUST] loading dataset...
+[ROBUST] date_from=2020-09-01 date_to=2020-12-31 window='2020-09_2020-12'
+[ROBUST] data size = 173872
+[ROBUST] Using REAL backtest function (in-memory).
+[ROBUST] Parallel enabled: workers=2 (spawn-safe) batch_size=32
+^C=====================================================
+[BOOT] 26/01/2026  7:56:45,54
+ROOT=C:\Users\PC\Documents\GitHub\Quant-Pro
+DATA=datasets\SOLUSDT\1m
+WINDOWS=2020-09_2020-12 2021-01_2021-12 2022-01_2023-06
+=====================================================
+[CYCLE] seed_base=5995 seeds=5995 5996 5997
+[ROBUST] window=2020-09_2020-12 seed=5995 out=results\robust\robust_2020-09_2020-12_seed5995.json
+[ROBUST] loading dataset...
+[ROBUST] date_from=2020-09-01 date_to=2020-12-31 window='2020-09_2020-12'
+[ROBUST] data size = 173872
+[ROBUST] Using REAL backtest function (in-memory).
+[ROBUST] Parallel enabled: workers=2 (spawn-safe) batch_size=32
+[ROBUST][HB] done=32/294 passed=0 failed=32 elapsed=00:11:04 rate=0.05 params/s window=2020-09_2020-12 seed=5995 top_fails: fold 0: min_trades (0)=32, fold 1: min_trades (0)=32, fold 2: min_trades (0)=32, fold 3: min_trades (0)=32, fold 4: min_trades (0)=32
+[ROBUST][HB] done=96/294 passed=0 failed=96 elapsed=00:21:53 rate=0.07 params/s window=2020-09_2020-12 seed=5995 top_fails: fold 0: min_trades (0)=96, fold 1: min_trades (0)=96, fold 2: min_trades (0)=96, fold 3: min_trades (0)=96, fold 4: min_trades (0)=96
+[ROBUST][HB] done=160/294 passed=0 failed=160 elapsed=00:32:49 rate=0.08 params/s window=2020-09_2020-12 seed=5995 top_fails: fold 0: min_trades (0)=160, fold 1: min_trades (0)=160, fold 2: min_trades (0)=160, fold 3: min_trades (0)=160, fold 4: min_trades (0)=160
+[ROBUST][HB] done=224/294 passed=0 failed=224 elapsed=00:43:46 rate=0.09 params/s window=2020-09_2020-12 seed=5995 top_fails: fold 0: min_trades (0)=224, fold 1: min_trades (0)=224, fold 2: min_trades (0)=224, fold 3: min_trades (0)=224, fold 4: min_trades (0)=224
+[ROBUST][HB] done=262/294 passed=0 failed=262 elapsed=00:45:54 rate=0.10 params/s window=2020-09_2020-12 seed=5995 top_fails: fold 0: min_trades (0)=262, fold 1: min_trades (0)=262, fold 2: min_trades (0)=262, fold 3: min_trades (0)=262, fold 4: min_trades (0)=262
+[ROBUST][HB] done=294/294 passed=0 failed=294 elapsed=00:54:38 rate=0.09 params/s window=2020-09_2020-12 seed=5995 top_fails: fold 0: min_trades (0)=294, fold 1: min_trades (0)=294, fold 2: min_trades (0)=294, fold 3: min_trades (0)=294, fold 4: min_trades (0)=294
+[ROBUST] finished, top=20
+[ROBUST] saved -> results\robust\robust_2020-09_2020-12_seed5995.json
+[ROBUST] window=2020-09_2020-12 seed=5996 out=results\robust\robust_2020-09_2020-12_seed5996.json
+[ROBUST] loading dataset...
+[ROBUST] date_from=2020-09-01 date_to=2020-12-31 window='2020-09_2020-12'
+[ROBUST] data size = 173872
+[ROBUST] Using REAL backtest function (in-memory).
+[ROBUST] Parallel enabled: workers=2 (spawn-safe) batch_size=32
 ^C
