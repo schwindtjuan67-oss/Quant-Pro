@@ -31,6 +31,7 @@ from concurrent.futures import ProcessPoolExecutor, as_completed, TimeoutError a
 # Reutilizamos helpers existentes (pero NO dependemos exclusivamente del iterador)
 from backtest.run_backtest import _date_range_to_ms, _iter_candles_from_csvs, _list_csv_files
 
+from analysis.feature_cache import FeatureCache, set_active_cache
 from analysis.grid_metrics import compute_metrics_from_trades, compute_score
 from analysis.opt_space import param_space_for_phase, normalize_phase, sample_params
 
@@ -424,13 +425,17 @@ def evaluate_params_walk_forward(
     backtest_fn: BacktestFn,
     splits: List[Tuple[slice, slice]],
     gates: Dict[str, Any],
+    test_slices: Optional[List[Any]] = None,
+    feature_caches: Optional[List[FeatureCache]] = None,
 ) -> EvalResult:
     fold_results: List[FoldResult] = []
     passed = True
     fail_reason: List[str] = []
 
     for i, (_tr_slice, te_slice) in enumerate(splits):
-        test_data = data[te_slice]
+        test_data = test_slices[i] if test_slices is not None else data[te_slice]
+        if feature_caches is not None and i < len(feature_caches):
+            set_active_cache(feature_caches[i])
         trades_test = backtest_fn(test_data, params)
 
         m = compute_metrics_from_trades(trades_test)
@@ -577,6 +582,7 @@ _WORKER_USE_DUMMY: bool = False
 
 # ✅ NUEVO: slice cache por worker (lista de test_slices ya materializados)
 _WORKER_TEST_SLICES: Optional[List[Any]] = None  # Any para permitir list/slice/np/etc
+_WORKER_FEATURE_CACHES: Optional[List[FeatureCache]] = None
 
 
 def _worker_init(
@@ -590,7 +596,7 @@ def _worker_init(
     use_dummy: bool,
 ):
     # Se ejecuta 1 vez por proceso
-    global _WORKER_DATA, _WORKER_BASE_CFG, _WORKER_SYMBOL, _WORKER_INTERVAL, _WORKER_WARMUP, _WORKER_GATES, _WORKER_SPLITS, _WORKER_USE_DUMMY, _WORKER_TEST_SLICES
+    global _WORKER_DATA, _WORKER_BASE_CFG, _WORKER_SYMBOL, _WORKER_INTERVAL, _WORKER_WARMUP, _WORKER_GATES, _WORKER_SPLITS, _WORKER_USE_DUMMY, _WORKER_TEST_SLICES, _WORKER_FEATURE_CACHES
     _WORKER_DATA = data
     _WORKER_BASE_CFG = base_cfg
     _WORKER_SYMBOL = symbol
@@ -603,10 +609,19 @@ def _worker_init(
     # ✅ Slice cache (reduce overhead de slicing repetido por param)
     try:
         _WORKER_TEST_SLICES = []
+        _WORKER_FEATURE_CACHES = []
         for (_tr_slice, te_slice) in _WORKER_SPLITS:
-            _WORKER_TEST_SLICES.append(_WORKER_DATA[te_slice])  # materializa 1 vez
+            raw_slice = _WORKER_DATA[te_slice]
+            materialized = []
+            for idx, c in enumerate(raw_slice):
+                row = dict(c)
+                row["_idx"] = idx
+                materialized.append(row)
+            _WORKER_TEST_SLICES.append(materialized)
+            _WORKER_FEATURE_CACHES.append(FeatureCache.from_candles(materialized))
     except Exception:
         _WORKER_TEST_SLICES = None
+        _WORKER_FEATURE_CACHES = None
 
 
 def _worker_backtest_fn(data_slice: Any, params: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -632,7 +647,7 @@ def _worker_backtest_fn(data_slice: Any, params: Dict[str, Any]) -> List[Dict[st
 def _evaluate_params_on_cached_test_slices(
     params: Dict[str, Any],
 ) -> Dict[str, Any]:
-    global _WORKER_TEST_SLICES, _WORKER_GATES
+    global _WORKER_TEST_SLICES, _WORKER_GATES, _WORKER_FEATURE_CACHES
 
     if _WORKER_TEST_SLICES is None:
         # fallback a la vieja vía (no debería si init pudo cachear)
@@ -644,6 +659,8 @@ def _evaluate_params_on_cached_test_slices(
         fail_reason: List[str] = []
 
         for i, test_data in enumerate(_WORKER_TEST_SLICES):
+            if _WORKER_FEATURE_CACHES is not None and i < len(_WORKER_FEATURE_CACHES):
+                set_active_cache(_WORKER_FEATURE_CACHES[i])
             trades_test = _worker_backtest_fn(test_data, params)
 
             m = compute_metrics_from_trades(trades_test)
@@ -808,7 +825,8 @@ def run_robust_search(
     gates: Optional[Dict[str, Any]] = None,
     top_k: int = 20,
     window: Optional[str] = None,
-) -> List[EvalResult]:
+    params_list: Optional[List[Dict[str, Any]]] = None,
+) -> Tuple[List[EvalResult], List[EvalResult]]:
     """
     Mantiene compat total.
     Si ROBUST_WORKERS>1 y no es un callable raro -> usa multiprocessing con ProcessPoolExecutor.
@@ -823,21 +841,22 @@ def run_robust_search(
     }
     FAIL_COUNTS.clear()
 
-    rng = np.random.default_rng(seed)
-    phase = normalize_phase(None)
-    space = param_space_for_phase(phase)
     splits = make_walk_forward_splits(len(data), n_folds=n_folds, min_train=min_train, min_test=min_test)
 
     # ---------- generar params determinísticamente ----------
-    seen = set()
-    params_list: List[Dict[str, Any]] = []
-    for _i in range(n_samples):
-        params = sample_params(space, rng=rng, hard_constraints=True)
-        key = json.dumps(params, sort_keys=True, ensure_ascii=False)
-        if key in seen:
-            continue
-        seen.add(key)
-        params_list.append(params)
+    if params_list is None:
+        rng = np.random.default_rng(seed)
+        phase = normalize_phase(None)
+        space = param_space_for_phase(phase)
+        seen = set()
+        params_list = []
+        for _i in range(n_samples):
+            params = sample_params(space, rng=rng, hard_constraints=True)
+            key = json.dumps(params, sort_keys=True, ensure_ascii=False)
+            if key in seen:
+                continue
+            seen.add(key)
+            params_list.append(params)
 
     # ---------- decidir si paralelizar ----------
     workers_env = os.getenv("ROBUST_WORKERS", "").strip()
@@ -858,6 +877,17 @@ def run_robust_search(
     # Si workers<=1 -> secuencial (idéntico a tu lógica actual)
     if workers <= 1:
         results: List[EvalResult] = []
+        feature_caches: List[FeatureCache] = []
+        test_slices: List[Any] = []
+        for (_tr_slice, te_slice) in splits:
+            raw_slice = data[te_slice]
+            materialized = []
+            for idx, c in enumerate(raw_slice):
+                row = dict(c)
+                row["_idx"] = idx
+                materialized.append(row)
+            test_slices.append(materialized)
+            feature_caches.append(FeatureCache.from_candles(materialized))
         done_params = 0
         total_params = len(params_list)
         passed_params = 0
@@ -874,6 +904,8 @@ def run_robust_search(
                     backtest_fn=backtest_fn,
                     splits=splits,
                     gates=gates,
+                    test_slices=test_slices,
+                    feature_caches=feature_caches,
                 )
                 results.append(er)
             except Exception as e:
@@ -919,7 +951,7 @@ def run_robust_search(
         )
         debug_path = os.path.join("results", "debug", f"fails_{window_label}_seed{seed}.json")
         _atomic_write_json(debug_path, failed_samples)
-        return results[:top_k]
+        return results[:top_k], results
 
     # ---------- paralelo: usamos workers global-init (NO pierde features) ----------
     use_dummy = bool(os.getenv("ROBUST_USE_DUMMY", "0").strip() in ("1", "true", "TRUE", "yes", "YES", "on", "ON"))
@@ -1161,7 +1193,7 @@ def run_robust_search(
     )
     debug_path = os.path.join("results", "debug", f"fails_{window_label}_seed{seed}.json")
     _atomic_write_json(debug_path, failed_samples)
-    return results[:top_k]
+    return results[:top_k], results
 
 
 def save_results_json(path: str, results: List[EvalResult], meta: Optional[Dict[str, Any]] = None) -> None:
@@ -1233,7 +1265,8 @@ def run_robust_search_parallel(
     use_dummy: bool = False,
     batch_size: int = 8,  # ✅ NUEVO: batch params
     window: Optional[str] = None,
-) -> List[EvalResult]:
+    params_list: Optional[List[Dict[str, Any]]] = None,
+) -> Tuple[List[EvalResult], List[EvalResult]]:
     gates = gates or {
         "min_trades": 30,
         "max_dd_r": 20.0,
@@ -1244,21 +1277,22 @@ def run_robust_search_parallel(
     }
     FAIL_COUNTS.clear()
 
-    rng = np.random.default_rng(seed)
-    phase = normalize_phase(None)
-    space = param_space_for_phase(phase)
     splits = make_walk_forward_splits(len(data), n_folds=n_folds, min_train=min_train, min_test=min_test)
 
     # generar params determinístico
-    seen = set()
-    params_list: List[Dict[str, Any]] = []
-    for _i in range(n_samples):
-        params = sample_params(space, rng=rng, hard_constraints=True)
-        key = json.dumps(params, sort_keys=True, ensure_ascii=False)
-        if key in seen:
-            continue
-        seen.add(key)
-        params_list.append(params)
+    if params_list is None:
+        rng = np.random.default_rng(seed)
+        phase = normalize_phase(None)
+        space = param_space_for_phase(phase)
+        seen = set()
+        params_list = []
+        for _i in range(n_samples):
+            params = sample_params(space, rng=rng, hard_constraints=True)
+            key = json.dumps(params, sort_keys=True, ensure_ascii=False)
+            if key in seen:
+                continue
+            seen.add(key)
+            params_list.append(params)
 
     # Windows-safe
     ctx = mp.get_context("spawn")
@@ -1385,7 +1419,51 @@ def run_robust_search_parallel(
     )
     debug_path = os.path.join("results", "debug", f"fails_{window_label}_seed{seed}.json")
     _atomic_write_json(debug_path, failed_samples)
-    return results[:top_k]
+    return results[:top_k], results
+
+
+def _load_survivor_params(path: str) -> List[Dict[str, Any]]:
+    with open(path, "r", encoding="utf-8") as f:
+        payload = json.load(f)
+
+    if isinstance(payload, dict) and isinstance(payload.get("survivors"), list):
+        payload = payload["survivors"]
+
+    params_list: List[Dict[str, Any]] = []
+    if isinstance(payload, list):
+        for item in payload:
+            if isinstance(item, dict) and isinstance(item.get("params"), dict):
+                params_list.append(item["params"])
+            elif isinstance(item, dict):
+                params_list.append(item)
+
+    seen = set()
+    uniq: List[Dict[str, Any]] = []
+    for params in params_list:
+        key = json.dumps(params, sort_keys=True, ensure_ascii=False)
+        if key in seen:
+            continue
+        seen.add(key)
+        uniq.append(params)
+    return uniq
+
+
+def _save_survivors(path: str, results: List[EvalResult], meta: Optional[Dict[str, Any]] = None) -> None:
+    payload = []
+    for r in results:
+        if not r.passed:
+            continue
+        payload.append({
+            "params": r.params,
+            "robust_score": r.robust_score,
+            "agg": r.agg,
+            "folds": [
+                {"fold_id": fr.fold_id, "score": fr.score, "metrics": fr.metrics}
+                for fr in r.fold_results
+            ],
+            "meta": meta or {},
+        })
+    _atomic_write_json(path, payload)
 
 
 # ============================================================
@@ -1398,6 +1476,7 @@ def main():
     ap.add_argument("--out", required=True, help="output json")
     ap.add_argument("--samples", type=int, default=200)
     ap.add_argument("--seed", type=int, default=1337)
+    ap.add_argument("--folds", type=int, default=3, help="folds walk-forward (SEARCH default=3, REVALIDATE recomendado=5)")
 
     ap.add_argument("--window", default=None, help="YYYY-MM_YYYY-MM (ej: 2020-01_2021-12)")
     ap.add_argument("--from-date", default=None, help="YYYY-MM-DD (compat)")
@@ -1421,6 +1500,8 @@ def main():
 
     # ✅ NUEVO: batch-size explícito (sin obligarte a usar env)
     ap.add_argument("--batch-size", type=int, default=0, help="batch params por task (0=auto/env default 8)")
+    ap.add_argument("--save-survivors", default=None, help="path JSON para guardar survivors (SEARCH)")
+    ap.add_argument("--revalidate", default=None, help="path JSON con survivors para revalidar (solo evalúa esos params)")
 
     args = ap.parse_args()
 
@@ -1513,40 +1594,50 @@ def main():
                     warmup=int(args.warmup),
                 )
 
+        folds = max(1, int(args.folds))
+        revalidate_params: Optional[List[Dict[str, Any]]] = None
+        if args.revalidate:
+            revalidate_params = _load_survivor_params(args.revalidate)
+            if not revalidate_params:
+                raise SystemExit(f"[ROBUST] No params found in --revalidate={args.revalidate}")
+
         # ejecutar
         if (not args.use_dummy) and workers > 1:
             assert base_cfg is not None
             print(f"[ROBUST] Parallel enabled: workers={workers} (spawn-safe) batch_size={batch_size}")
-            results = run_robust_search_parallel(
+            top_results, all_results = run_robust_search_parallel(
                 data=data,
                 base_cfg=base_cfg,
                 symbol=args.symbol,
                 interval=args.interval,
                 warmup=int(args.warmup),
-                n_samples=int(args.samples),
+                n_samples=int(args.samples if not revalidate_params else len(revalidate_params)),
                 seed=int(args.seed),
-                n_folds=5,
+                n_folds=folds,
                 min_train=10_000,
                 min_test=2_000,
                 gates=None,
-                top_k=20,
+                top_k=len(revalidate_params) if revalidate_params else 20,
                 workers=workers,
                 use_dummy=bool(args.use_dummy),
                 batch_size=int(batch_size),
                 window=window_label,
+                params_list=revalidate_params,
             )
         else:
             if workers > 1 and args.use_dummy:
                 print("[ROBUST][WARN] Parallel + dummy: usando modo secuencial (dummy es demasiado rápido y el overhead domina).")
-            results = run_robust_search(
+            top_results, all_results = run_robust_search(
                 data=data,
                 backtest_fn=backtest_fn,
-                n_samples=args.samples,
+                n_samples=int(args.samples if not revalidate_params else len(revalidate_params)),
                 seed=args.seed,
+                n_folds=folds,
                 window=window_label,
+                params_list=revalidate_params,
             )
 
-        print(f"[ROBUST] finished, top={len(results)}")
+        print(f"[ROBUST] finished, top={len(top_results)}")
         # meta audit: qué phase y qué keys se samplearon (crítico para congelar A→B)
         _phase = normalize_phase(None)
         _space = param_space_for_phase(_phase)
@@ -1555,8 +1646,16 @@ def main():
             "space_keys": sorted(list(_space.keys())),
             "workers": int(workers),
             "batch_size": int(batch_size),
+            "folds": int(folds),
+            "mode": "revalidate" if revalidate_params else "search",
         })
-        save_results_json(out_path, results, meta=meta)
+        if revalidate_params:
+            passed_results = [r for r in all_results if r.passed]
+            save_results_json(out_path, passed_results, meta=meta)
+        else:
+            save_results_json(out_path, top_results, meta=meta)
+            if args.save_survivors:
+                _save_survivors(args.save_survivors, all_results, meta=meta)
         print(f"[ROBUST] saved -> {out_path}")
     except Exception as e:
         import traceback
