@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+<<<<<<< Updated upstream
 import os
 import sys
 import json
@@ -15,6 +16,11 @@ from typing import Dict, List, Any, Tuple, Optional
 # PATH SETUP
 # -------------------------------------------------
 
+=======
+import os, sys, json, glob, statistics
+from typing import Dict, List, Any, Tuple, Optional
+
+>>>>>>> Stashed changes
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
@@ -27,7 +33,9 @@ from analysis.opt_space import phase_keys
 
 ROBUST_DIR = "results/robust"
 OUT_DIR = "results/promotions"
+RULES_PATH = os.path.join("configs", "promotion_rules_A.json")
 
+<<<<<<< Updated upstream
 RULES_PATH = os.getenv(
     "PIPELINE_RULES",
     os.path.join("configs", "promotion_rules_A.json"),
@@ -44,6 +52,17 @@ SEEDS: Optional[set] = None  # None = aceptar cualquier seed
 # LOAD RULES
 # -------------------------------------------------
 
+=======
+SEEDS: Optional[set] = None          # None = aceptar cualquier seed
+MIN_SEED_PASSES = 1                 # seeds mínimos por ventana
+MIN_WINDOWS_PASSES = 2              # ventanas mínimas
+TOP_K_PROMOTED = 30
+
+# ===============================
+# RULE LOADING
+# ===============================
+
+>>>>>>> Stashed changes
 with open(RULES_PATH, "r", encoding="utf-8") as f:
     RULES = json.load(f)
 
@@ -51,14 +70,25 @@ FILTERS = RULES.get("filters", {})
 PROMOTION = RULES.get("promotion", {})
 PHASE = str(RULES.get("phase", "A")).upper()
 
+<<<<<<< Updated upstream
 MIN_SEED_PASSES = int(PROMOTION.get("min_seeds_passed", 1))
 MIN_WINDOWS_PASSES = int(PROMOTION.get("min_windows_passed", 1))
 TOP_K_PROMOTED = int(PROMOTION.get("top_k", 50))
+=======
+def _metric(rec: Dict[str, Any], key: str, default=0.0) -> float:
+    agg = rec.get("agg", {}) or {}
+    return float(agg.get(key, default) or default)
+
+def _passes_rules(rec: Dict[str, Any]) -> bool:
+    agg = rec.get("agg", {}) or {}
+    folds = rec.get("folds", []) or []
+>>>>>>> Stashed changes
 
 # -------------------------------------------------
 # METRIC NORMALIZATION (CANONICAL)
 # -------------------------------------------------
 
+<<<<<<< Updated upstream
 def normalize_metrics(rec: Dict[str, Any]) -> Dict[str, float]:
     """
     Fuente canónica: folds.
@@ -120,6 +150,18 @@ def _passes_filters_verbose(
 
     return (len(reasons) == 0), reasons
 
+=======
+    return (
+        trades >= RULES["min_trades_total_mean"]
+        and trades >= RULES["min_trades_total_min"]
+        and _metric(rec, "profit_factor") >= RULES["min_pf_mean"]
+        and _metric(rec, "winrate") >= RULES["min_winrate_mean"]
+        and abs(_metric(rec, "max_drawdown_r", 999)) <= RULES["max_dd_max"]
+        and _metric(rec, "expectancy") >= RULES["min_expectancy_mean"]
+        and _metric(rec, "robust_score") >= RULES["min_robust_mean"]
+    )
+
+>>>>>>> Stashed changes
 def promotion_score(scores: List[float]) -> float:
     if not scores:
         return -1e9
@@ -130,17 +172,19 @@ def promotion_score(scores: List[float]) -> float:
     )
 
 def parse_filename(path: str) -> Tuple[str, int]:
-    """
-    robust_2021-01_2021-12_seed1337.json
-    -> ("2021-01_2021-12", 1337)
-    """
     name = os.path.basename(path)
     parts = name.replace(".json", "").split("_seed")
     return parts[0].replace("robust_", ""), int(parts[1])
 
+<<<<<<< Updated upstream
 # -------------------------------------------------
 # MAIN
 # -------------------------------------------------
+=======
+# ===============================
+# MAIN
+# ===============================
+>>>>>>> Stashed changes
 
 def main() -> None:
     os.makedirs(OUT_DIR, exist_ok=True)
@@ -150,11 +194,17 @@ def main() -> None:
         print("[POST] No robust files found.")
         return
 
+<<<<<<< Updated upstream
     frozen_keys = phase_keys(PHASE)
 
     # window -> param_key -> seed -> record
     bucket: Dict[str, Dict[str, Dict[int, Dict[str, Any]]]] = {}
 
+=======
+    bucket: Dict[str, Dict[str, Dict[int, Dict[str, Any]]]] = {}
+    frozen_keys_a = phase_keys("A")
+    skipped_non_a = 0
+>>>>>>> Stashed changes
     skipped_seed = 0
     skipped_phase = 0
 
@@ -176,6 +226,7 @@ def main() -> None:
             continue
 
         for r in data:
+<<<<<<< Updated upstream
             if not isinstance(r, dict):
                 continue
 
@@ -183,6 +234,13 @@ def main() -> None:
             ph = str(meta.get("pipeline_phase", "")).strip().upper()
             if ph != PHASE:
                 skipped_phase += 1
+=======
+            meta = r.get("meta", {}) or {}
+            ph = str(meta.get("pipeline_phase", "")).upper()
+
+            if ph != "A":
+                skipped_non_a += 1
+>>>>>>> Stashed changes
                 continue
 
             params = r.get("params")
@@ -205,6 +263,7 @@ def main() -> None:
             scores: List[float] = []
 
             for seed, rec in seed_map.items():
+<<<<<<< Updated upstream
                 metrics = normalize_metrics(rec)
                 ok, reasons = _passes_filters_verbose(metrics)
 
@@ -225,6 +284,12 @@ def main() -> None:
                         metrics["robust_score_mean"],
                     ])
 
+=======
+                if _passes_rules(rec):
+                    passed_seeds.append(seed)
+                    robust_scores.append(_metric(rec, "robust_score", -1e9))
+
+>>>>>>> Stashed changes
             if len(passed_seeds) >= MIN_SEED_PASSES:
                 promoted.setdefault(key, {
                     "params": json.loads(key),
@@ -249,6 +314,7 @@ def main() -> None:
             p["promotion_score"] = promotion_score(p["scores"])
             final.append(p)
 
+<<<<<<< Updated upstream
     final.sort(key=lambda x: float(x.get("promotion_score", -1e9)), reverse=True)
     final = final[:TOP_K_PROMOTED]
 
@@ -261,6 +327,13 @@ def main() -> None:
         f"fase{PHASE}_promoted.json"
     )
     with open(out_json, "w", encoding="utf-8") as f:
+=======
+    final.sort(key=lambda x: x["promotion_score"], reverse=True)
+    final = final[:TOP_K_PROMOTED]
+
+    out = os.path.join(OUT_DIR, "faseA_promoted.json")
+    with open(out, "w", encoding="utf-8") as f:
+>>>>>>> Stashed changes
         json.dump(final, f, indent=2, ensure_ascii=False)
 
     # 👉 FIX CRÍTICO: writer SIEMPRE dentro del with
@@ -286,6 +359,7 @@ def main() -> None:
     # ---------------------------
 
     print("=========================================")
+<<<<<<< Updated upstream
     print(f"[POST] Phase {PHASE} promoted: {len(final)}")
     print(f"[POST] Saved -> {out_json}")
     print(f"[POST] Rejection audit -> {WHY_REJECTED_CSV}")
@@ -293,6 +367,14 @@ def main() -> None:
         print(f"[POST][INFO] Skipped {skipped_seed} files by SEEDS")
     if skipped_phase:
         print(f"[POST][WARN] Skipped {skipped_phase} records from other phases")
+=======
+    print(f"[POST] Promoted candidates: {len(final)}")
+    print(f"[POST] Saved -> {out}")
+    if skipped_seed:
+        print(f"[POST][INFO] Skipped {skipped_seed} files by SEEDS")
+    if skipped_non_a:
+        print(f"[POST][WARN] Skipped {skipped_non_a} non-A records")
+>>>>>>> Stashed changes
     print("=========================================")
 
     if not final:
@@ -300,13 +382,19 @@ def main() -> None:
     else:
         print(f"[POST] Promotion SUCCESS. Ready for next phase.")
 
+<<<<<<< Updated upstream
 # -------------------------------------------------
 
+=======
+>>>>>>> Stashed changes
 if __name__ == "__main__":
     main()
 
 
 
+<<<<<<< Updated upstream
 
 
 
+=======
+>>>>>>> Stashed changes

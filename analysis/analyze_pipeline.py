@@ -1,3 +1,10 @@
+"""
+UTILITY SCRIPT.
+Not used by run_autoloop_A_B_C.bat.
+For manual analysis only.
+"""
+
+
 import os
 import json
 import pandas as pd

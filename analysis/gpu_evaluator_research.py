@@ -1,3 +1,9 @@
+"""
+UTILITY SCRIPT.
+Not used by run_autoloop_A_B_C.bat.
+For manual analysis only.
+"""
+
 #!/usr/bin/env python3
 # analysis/gpu_evaluator.py
 from __future__ import annotations
