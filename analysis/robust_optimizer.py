@@ -19,7 +19,8 @@ import json
 import pickle
 import multiprocessing as mp
 import tempfile
-from dataclasses import dataclass
+from collections import Counter
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 import time
 from typing import Any, Callable, Dict, List, Optional, Tuple
@@ -50,9 +51,12 @@ class EvalResult:
     agg: Dict[str, float]
     robust_score: float
     passed: bool
-    fail_reason: str = ""
+    fail_reason: List[str] = field(default_factory=list)
     exception: str = ""
     traceback: str = ""
+
+
+FAIL_COUNTS = Counter()
 
 
 # ============================================================
@@ -135,8 +139,33 @@ def _emit_heartbeat(
         f"elapsed={_format_elapsed_hms(elapsed)} "
         f"rate={rate:.2f} params/s window={window_label} seed={seed}"
     )
+    top_fails = ", ".join(f"{k}={v}" for k, v in FAIL_COUNTS.most_common(5))
+    msg = f"{msg} top_fails: {top_fails}"
     print(msg, flush=True)
     return now
+
+
+def _normalize_fail_reasons(reasons: Any) -> List[str]:
+    if isinstance(reasons, list):
+        return [str(r) for r in reasons if str(r)]
+    if isinstance(reasons, str):
+        return [reasons] if reasons else []
+    if reasons is None:
+        return []
+    return [str(reasons)]
+
+
+def _record_fail_reasons(reasons: List[str]) -> None:
+    for reason in reasons:
+        FAIL_COUNTS[reason] += 1
+
+
+def _format_fail_metrics_from_folds(folds: List[FoldResult]) -> List[Dict[str, Any]]:
+    return [{"fold_id": fr.fold_id, "metrics": fr.metrics} for fr in folds]
+
+
+def _format_fail_metrics_from_payload_folds(folds: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    return [{"fold_id": fr.get("fold_id"), "metrics": fr.get("metrics")} for fr in folds]
 
 
 # ============================================================
@@ -345,6 +374,32 @@ def _passes_gates(metrics: Dict[str, float], gates: Dict[str, Any]) -> Tuple[boo
     return True, ""
 
 
+def check_filters(metrics: Dict[str, float], filters: Dict[str, Any]) -> Tuple[bool, List[str]]:
+    reasons: List[str] = []
+    used_keys = ("trades", "max_drawdown_r", "profit_factor", "winrate")
+    for key in used_keys:
+        if key not in metrics or metrics.get(key) is None:
+            reasons.append(f"missing:{key}")
+            continue
+        try:
+            val = float(metrics.get(key))
+        except Exception:
+            reasons.append(f"nan:{key}")
+            continue
+        if np.isnan(val):
+            reasons.append(f"nan:{key}")
+        elif np.isinf(val):
+            reasons.append(f"inf:{key}")
+
+    ok, reason = _passes_gates(metrics, filters)
+    if not ok and reason:
+        reasons.append(reason)
+
+    if reasons:
+        return False, reasons
+    return True, []
+
+
 def aggregate_fold_scores(
     fold_scores: List[float],
     lam_std: float = 0.75,
@@ -367,20 +422,21 @@ def evaluate_params_walk_forward(
 ) -> EvalResult:
     fold_results: List[FoldResult] = []
     passed = True
-    fail_reason = ""
+    fail_reason: List[str] = []
 
     for i, (_tr_slice, te_slice) in enumerate(splits):
         test_data = data[te_slice]
         trades_test = backtest_fn(test_data, params)
 
         m = compute_metrics_from_trades(trades_test)
-        ok, reason = _passes_gates(m, gates)
+        ok, reasons = check_filters(m, gates)
         s = compute_score(m)
 
         fold_results.append(FoldResult(fold_id=i, metrics=m, score=s))
         if not ok:
             passed = False
-            fail_reason = f"fold {i}: {reason}"
+            for reason in reasons:
+                fail_reason.append(f"fold {i}: {reason}")
 
     fold_scores = [fr.score for fr in fold_results]
     robust = aggregate_fold_scores(
@@ -580,19 +636,20 @@ def _evaluate_params_on_cached_test_slices(
     try:
         fold_results: List[FoldResult] = []
         passed = True
-        fail_reason = ""
+        fail_reason: List[str] = []
 
         for i, test_data in enumerate(_WORKER_TEST_SLICES):
             trades_test = _worker_backtest_fn(test_data, params)
 
             m = compute_metrics_from_trades(trades_test)
-            ok, reason = _passes_gates(m, _WORKER_GATES)
+            ok, reasons = check_filters(m, _WORKER_GATES)
             s = compute_score(m)
 
             fold_results.append(FoldResult(fold_id=i, metrics=m, score=s))
             if not ok:
                 passed = False
-                fail_reason = f"fold {i}: {reason}"
+                for reason in reasons:
+                    fail_reason.append(f"fold {i}: {reason}")
 
         fold_scores = [fr.score for fr in fold_results]
         robust = aggregate_fold_scores(
@@ -627,7 +684,7 @@ def _evaluate_params_on_cached_test_slices(
         return {
             "params": params,
             "passed": False,
-            "fail_reason": f"EXCEPTION:{type(e).__name__}: {e}",
+            "fail_reason": [f"EXCEPTION:{type(e).__name__}: {e}"],
             "exception": str(e),
             "traceback": tb,
             "agg": {},
@@ -656,7 +713,7 @@ def _worker_eval_one(params: Dict[str, Any]) -> Dict[str, Any]:
         return {
             "params": params,
             "passed": False,
-            "fail_reason": "OOM",
+            "fail_reason": ["OOM"],
             "exception": "MemoryError",
             "traceback": tb,
             "agg": {},
@@ -670,7 +727,7 @@ def _worker_eval_one(params: Dict[str, Any]) -> Dict[str, Any]:
         return {
             "params": params,
             "passed": False,
-            "fail_reason": f"EXCEPTION:{type(e).__name__}: {e}",
+            "fail_reason": [f"EXCEPTION:{type(e).__name__}: {e}"],
             "exception": str(e),
             "traceback": tb,
             "agg": {},
@@ -708,7 +765,7 @@ def _worker_eval_batch(params_batch: List[Dict[str, Any]]) -> List[Dict[str, Any
             out.append({
                 "params": p,
                 "passed": False,
-                "fail_reason": "OOM",
+                "fail_reason": ["OOM"],
                 "exception": "MemoryError",
                 "traceback": tb,
                 "agg": {},
@@ -721,7 +778,7 @@ def _worker_eval_batch(params_batch: List[Dict[str, Any]]) -> List[Dict[str, Any
             out.append({
                 "params": p,
                 "passed": False,
-                "fail_reason": f"EXCEPTION:{type(e).__name__}: {e}",
+                "fail_reason": [f"EXCEPTION:{type(e).__name__}: {e}"],
                 "exception": str(e),
                 "traceback": tb,
                 "agg": {},
@@ -759,6 +816,7 @@ def run_robust_search(
         "lam_std": 0.75,
         "beta_worst": 0.35,
     }
+    FAIL_COUNTS.clear()
 
     rng = np.random.default_rng(seed)
     phase = normalize_phase(None)
@@ -802,6 +860,7 @@ def run_robust_search(
         hb_started_at = time.monotonic()
         hb_last_emit = hb_started_at
         window_label = window or "unknown"
+        failed_samples: List[Dict[str, Any]] = []
         for params in params_list:
             try:
                 er = evaluate_params_walk_forward(
@@ -821,7 +880,7 @@ def run_robust_search(
                     agg={},
                     robust_score=-1e9,
                     passed=False,
-                    fail_reason=f"EXCEPTION:{type(e).__name__}: {e}",
+                    fail_reason=[f"EXCEPTION:{type(e).__name__}: {e}"],
                     exception=str(e),
                     traceback=tb,
                 ))
@@ -830,6 +889,14 @@ def run_robust_search(
                 passed_params += 1
             else:
                 failed_params += 1
+                reasons = _normalize_fail_reasons(results[-1].fail_reason)
+                _record_fail_reasons(reasons)
+                if len(failed_samples) < 20:
+                    failed_samples.append({
+                        "params": results[-1].params,
+                        "metrics": _format_fail_metrics_from_folds(results[-1].fold_results),
+                        "reasons": reasons,
+                    })
             hb_last_emit = _emit_heartbeat(
                 done_params,
                 total_params,
@@ -845,6 +912,8 @@ def run_robust_search(
             key=lambda r: (r.robust_score, r.agg.get("score_worst", -1e9), -r.agg.get("score_std", 1e9)),
             reverse=True,
         )
+        debug_path = os.path.join("results", "debug", f"fails_{window_label}_seed{seed}.json")
+        _atomic_write_json(debug_path, failed_samples)
         return results[:top_k]
 
     # ---------- paralelo: usamos workers global-init (NO pierde features) ----------
@@ -869,6 +938,7 @@ def run_robust_search(
         batch_size = 1
 
     results_payloads: List[Dict[str, Any]] = []
+    failed_samples: List[Dict[str, Any]] = []
 
     # Context spawn = Windows safe; en Linux también funciona.
     ctx = mp.get_context("spawn")
@@ -924,6 +994,16 @@ def run_robust_search(
                     passed_in_batch = sum(1 for item in res if item.get("passed"))
                     passed_params += passed_in_batch
                     failed_params += len(res) - passed_in_batch
+                    for item in res:
+                        if not item.get("passed"):
+                            reasons = _normalize_fail_reasons(item.get("fail_reason"))
+                            _record_fail_reasons(reasons)
+                            if len(failed_samples) < 20:
+                                failed_samples.append({
+                                    "params": item.get("params"),
+                                    "metrics": _format_fail_metrics_from_payload_folds(item.get("folds", [])),
+                                    "reasons": reasons,
+                                })
                 else:
                     results_payloads.append(res)
                     done_params += 1
@@ -931,31 +1011,57 @@ def run_robust_search(
                         passed_params += 1
                     else:
                         failed_params += 1
+                        reasons = _normalize_fail_reasons(res.get("fail_reason"))
+                        _record_fail_reasons(reasons)
+                        if len(failed_samples) < 20:
+                            failed_samples.append({
+                                "params": res.get("params"),
+                                "metrics": _format_fail_metrics_from_payload_folds(res.get("folds", [])),
+                                "reasons": reasons,
+                            })
 
             except FuturesTimeoutError:
                 # Timeout: si era batch, marcamos todos los params del batch
                 if fut in fut_to_batch:
                     b = fut_to_batch[fut]
                     for p in b:
-                        results_payloads.append({
+                        payload = {
                             "params": p,
                             "passed": False,
-                            "fail_reason": "TIMEOUT",
+                            "fail_reason": ["TIMEOUT"],
                             "agg": {},
                             "robust_score": -1e9,
                             "folds": [],
-                        })
+                        }
+                        results_payloads.append(payload)
+                        reasons = _normalize_fail_reasons(payload.get("fail_reason"))
+                        _record_fail_reasons(reasons)
+                        if len(failed_samples) < 20:
+                            failed_samples.append({
+                                "params": payload.get("params"),
+                                "metrics": [],
+                                "reasons": reasons,
+                            })
                     done_params += len(b)
                     failed_params += len(b)
                 else:
-                    results_payloads.append({
+                    payload = {
                         "params": {},
                         "passed": False,
-                        "fail_reason": "TIMEOUT",
+                        "fail_reason": ["TIMEOUT"],
                         "agg": {},
                         "robust_score": -1e9,
                         "folds": [],
-                    })
+                    }
+                    results_payloads.append(payload)
+                    reasons = _normalize_fail_reasons(payload.get("fail_reason"))
+                    _record_fail_reasons(reasons)
+                    if len(failed_samples) < 20:
+                        failed_samples.append({
+                            "params": payload.get("params"),
+                            "metrics": [],
+                            "reasons": reasons,
+                        })
                     done_params += 1
                     failed_params += 1
 
@@ -966,29 +1072,47 @@ def run_robust_search(
                 if fut in fut_to_batch:
                     b = fut_to_batch[fut]
                     for p in b:
-                        results_payloads.append({
+                        payload = {
                             "params": p,
                             "passed": False,
-                            "fail_reason": f"EXCEPTION:{type(e).__name__}: {e}",
+                            "fail_reason": [f"EXCEPTION:{type(e).__name__}: {e}"],
                             "exception": str(e),
                             "traceback": tb,
                             "agg": {},
                             "robust_score": -1e9,
                             "folds": [],
-                        })
+                        }
+                        results_payloads.append(payload)
+                        reasons = _normalize_fail_reasons(payload.get("fail_reason"))
+                        _record_fail_reasons(reasons)
+                        if len(failed_samples) < 20:
+                            failed_samples.append({
+                                "params": payload.get("params"),
+                                "metrics": [],
+                                "reasons": reasons,
+                            })
                     done_params += len(b)
                     failed_params += len(b)
                 else:
-                    results_payloads.append({
+                    payload = {
                         "params": {},
                         "passed": False,
-                        "fail_reason": f"EXCEPTION:{type(e).__name__}: {e}",
+                        "fail_reason": [f"EXCEPTION:{type(e).__name__}: {e}"],
                         "exception": str(e),
                         "traceback": tb,
                         "agg": {},
                         "robust_score": -1e9,
                         "folds": [],
-                    })
+                    }
+                    results_payloads.append(payload)
+                    reasons = _normalize_fail_reasons(payload.get("fail_reason"))
+                    _record_fail_reasons(reasons)
+                    if len(failed_samples) < 20:
+                        failed_samples.append({
+                            "params": payload.get("params"),
+                            "metrics": [],
+                            "reasons": reasons,
+                        })
                     done_params += 1
                     failed_params += 1
 
@@ -1021,7 +1145,7 @@ def run_robust_search(
             agg=pl.get("agg", {}) or {},
             robust_score=float(pl.get("robust_score", -1e9)),
             passed=bool(pl.get("passed", False)),
-            fail_reason=str(pl.get("fail_reason", "") or ""),
+            fail_reason=_normalize_fail_reasons(pl.get("fail_reason")),
             exception=str(pl.get("exception", "") or ""),
             traceback=str(pl.get("traceback", "") or ""),
         ))
@@ -1030,6 +1154,8 @@ def run_robust_search(
         key=lambda r: (r.robust_score, r.agg.get("score_worst", -1e9), -r.agg.get("score_std", 1e9)),
         reverse=True,
     )
+    debug_path = os.path.join("results", "debug", f"fails_{window_label}_seed{seed}.json")
+    _atomic_write_json(debug_path, failed_samples)
     return results[:top_k]
 
 
@@ -1111,6 +1237,7 @@ def run_robust_search_parallel(
         "lam_std": 0.75,
         "beta_worst": 0.35,
     }
+    FAIL_COUNTS.clear()
 
     rng = np.random.default_rng(seed)
     phase = normalize_phase(None)
@@ -1148,6 +1275,7 @@ def run_robust_search_parallel(
     hb_started_at = time.monotonic()
     hb_last_emit = hb_started_at
     window_label = window or "unknown"
+    failed_samples: List[Dict[str, Any]] = []
     with ProcessPoolExecutor(
         max_workers=max(1, int(workers)),
         mp_context=ctx,
@@ -1165,6 +1293,14 @@ def run_robust_search_parallel(
                     passed_params += 1
                 else:
                     failed_params += 1
+                    reasons = _normalize_fail_reasons(res.get("fail_reason"))
+                    _record_fail_reasons(reasons)
+                    if len(failed_samples) < 20:
+                        failed_samples.append({
+                            "params": res.get("params"),
+                            "metrics": _format_fail_metrics_from_payload_folds(res.get("folds", [])),
+                            "reasons": reasons,
+                        })
                 if progress_every > 0 and (done % progress_every == 0):
                     print(f"[ROBUST][PAR] done {done}/{len(futs)}")
                 hb_last_emit = _emit_heartbeat(
@@ -1194,6 +1330,16 @@ def run_robust_search_parallel(
                 done_params += len(batch_payloads)
                 passed_params += passed_in_batch
                 failed_params += len(batch_payloads) - passed_in_batch
+                for pl in batch_payloads:
+                    if not pl.get("passed"):
+                        reasons = _normalize_fail_reasons(pl.get("fail_reason"))
+                        _record_fail_reasons(reasons)
+                        if len(failed_samples) < 20:
+                            failed_samples.append({
+                                "params": pl.get("params"),
+                                "metrics": _format_fail_metrics_from_payload_folds(pl.get("folds", [])),
+                                "reasons": reasons,
+                            })
                 if progress_every > 0 and (done_params % progress_every == 0):
                     print(f"[ROBUST][PAR] done {done_params}/{total_params} (batch_size={batch_size})")
                 hb_last_emit = _emit_heartbeat(
@@ -1223,7 +1369,7 @@ def run_robust_search_parallel(
             agg=pl.get("agg", {}) or {},
             robust_score=float(pl.get("robust_score", -1e9)),
             passed=bool(pl.get("passed", False)),
-            fail_reason=str(pl.get("fail_reason", "") or ""),
+            fail_reason=_normalize_fail_reasons(pl.get("fail_reason")),
             exception=str(pl.get("exception", "") or ""),
             traceback=str(pl.get("traceback", "") or ""),
         ))
@@ -1232,6 +1378,8 @@ def run_robust_search_parallel(
         key=lambda r: (r.robust_score, r.agg.get("score_worst", -1e9), -r.agg.get("score_std", 1e9)),
         reverse=True,
     )
+    debug_path = os.path.join("results", "debug", f"fails_{window_label}_seed{seed}.json")
+    _atomic_write_json(debug_path, failed_samples)
     return results[:top_k]
 
 
@@ -1409,7 +1557,7 @@ def main():
         import traceback
         err_payload = {
             "passed": False,
-            "fail_reason": f"TOPLEVEL_EXCEPTION:{type(e).__name__}",
+            "fail_reason": [f"TOPLEVEL_EXCEPTION:{type(e).__name__}"],
             "exception": str(e),
             "traceback": traceback.format_exc(),
             "meta": meta,
