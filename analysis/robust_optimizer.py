@@ -355,7 +355,7 @@ def make_walk_forward_splits(
 # ============================================================
 
 def _passes_gates(metrics: Dict[str, float], gates: Dict[str, Any]) -> Tuple[bool, str]:
-    t = metrics.get("trades", 0)
+    t = metrics.get("n", metrics.get("trades", 0))
     if t < gates.get("min_trades", 30):
         return False, f"min_trades ({t})"
 
@@ -375,6 +375,11 @@ def _passes_gates(metrics: Dict[str, float], gates: Dict[str, Any]) -> Tuple[boo
 
 
 def check_filters(metrics: Dict[str, float], filters: Dict[str, Any]) -> Tuple[bool, List[str]]:
+    if isinstance(metrics, dict) and "metrics" in metrics and "n" in metrics and isinstance(metrics["metrics"], dict):
+        inner = dict(metrics["metrics"])
+        inner["trades"] = metrics.get("n", 0)
+        metrics = inner
+
     reasons: List[str] = []
     used_keys = ("trades", "max_drawdown_r", "profit_factor", "winrate")
     for key in used_keys:
