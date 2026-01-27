@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional, Tuple
 import os
+import inspect
 
 os.environ["QS_BACKTEST"] = "1"
 RUN_MODE = os.getenv("RUN_MODE", "LIVE").upper().strip()
@@ -69,6 +70,7 @@ class BacktestRunner:
         from Live.risk_manager import RiskManager
         from Live.logger_pro import TradeLogger
         from Live.hybrid_scalper_pro_adapter import HybridAdapterShadow
+        from Live.hybrid_scalper_pro import HybridScalperPRO
 
         # ---------------- sanity ----------------
         if len(self.candles) == 0:
@@ -151,17 +153,99 @@ class BacktestRunner:
                 else:
                     self.delta_live = None
                     self.delta_router = None
+                self.strategy, self._strategy_handler = self._build_strategy(
+                    adapter_cls=HybridAdapterShadow,
+                    hybrid_cls=HybridScalperPRO,
+                )
 
-                self.strategy = HybridAdapterShadow(
+            def on_new_candle(self, candle: Dict[str, Any]):
+                self._strategy_handler(candle)
+
+            def _get_strategy_spec(self) -> Tuple[Optional[str], Dict[str, Any]]:
+                cfg = getattr(self, "config", None)
+                if not isinstance(cfg, dict):
+                    return None, {}
+                strategy = cfg.get("strategy")
+                if not isinstance(strategy, dict):
+                    return None, {}
+                name = str(strategy.get("name") or "").strip()
+                if not name:
+                    return None, {}
+                kwargs = strategy.get("kwargs") if isinstance(strategy.get("kwargs"), dict) else {}
+                return name, kwargs
+
+            def _split_kwargs(
+                self,
+                cls: Any,
+                kwargs: Dict[str, Any],
+            ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+                try:
+                    params = inspect.signature(cls.__init__).parameters
+                    accepted = {k for k in params if k != "self"}
+                except Exception:
+                    accepted = set()
+                ctor_kwargs = {k: v for k, v in (kwargs or {}).items() if k in accepted}
+                extra_kwargs = {k: v for k, v in (kwargs or {}).items() if k not in accepted}
+                return ctor_kwargs, extra_kwargs
+
+            def _apply_extra_kwargs(self, strategy: Any, extra: Dict[str, Any]) -> None:
+                for k, v in (extra or {}).items():
+                    try:
+                        setattr(strategy, k, v)
+                    except Exception:
+                        pass
+
+            def _apply_legacy_params(self, strategy: Any) -> None:
+                cfg = getattr(self, "config", None)
+                if not isinstance(cfg, dict):
+                    return
+                params = {}
+                if isinstance(cfg.get("strategy_params"), dict):
+                    params = cfg["strategy_params"]
+                elif isinstance(cfg.get("strategy"), dict) and isinstance(cfg["strategy"].get("params"), dict):
+                    params = cfg["strategy"]["params"]
+                self._apply_extra_kwargs(strategy, params)
+
+            def _resolve_strategy_handler(self, strategy: Any) -> Any:
+                for name in ("on_new_candle", "on_new_bar", "on_bar", "on_candle"):
+                    fn = getattr(strategy, name, None)
+                    if callable(fn):
+                        return fn
+                raise AttributeError("Strategy does not expose candle handler")
+
+            def _build_strategy(
+                self,
+                *,
+                adapter_cls: Any,
+                hybrid_cls: Any,
+            ) -> Tuple[Any, Any]:
+                name, kwargs = self._get_strategy_spec()
+                if name:
+                    name_norm = name.strip().lower()
+                    if name_norm in ("hybrid_scalper_pro", "hybridscalperpro", "hybrid_scalper"):
+                        ctor_kwargs, extra_kwargs = self._split_kwargs(hybrid_cls, kwargs)
+                        strategy = hybrid_cls(
+                            symbol=self.symbol,
+                            router=self.router,
+                            delta_router=self.delta_router,
+                            risk_manager=self.risk_manager,
+                            event_bus=None,
+                            logger=self.logger,
+                            **ctor_kwargs,
+                        )
+                        self._apply_extra_kwargs(strategy, extra_kwargs)
+                        self._apply_legacy_params(strategy)
+                        return strategy, self._resolve_strategy_handler(strategy)
+                    raise ValueError(f"BacktestRunner: unsupported strategy name {name!r}")
+
+                strategy = adapter_cls(
                     engine=self,
                     allocator=None,
                     config_selector=None,
                     hotswap_enabled=False,
                     verbose=False,
                 )
-
-            def on_new_candle(self, candle: Dict[str, Any]):
-                self.strategy.on_new_candle(candle)
+                return strategy, self._resolve_strategy_handler(strategy)
 
         engine = OfflineEngine(self)
 

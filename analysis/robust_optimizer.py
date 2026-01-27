@@ -536,18 +536,35 @@ def _real_backtest_fn(
     last_err: Optional[Exception] = None
 
     # Probar firmas comunes sin romper
+    strategy_kwargs = _map_params_to_hybrid_kwargs(params)
+    cfg_payload = json.loads(json.dumps(base_cfg)) if isinstance(base_cfg, dict) else {}
+    cfg_payload["strategy"] = {
+        "name": "hybrid_scalper_pro",
+        "kwargs": strategy_kwargs,
+    }
+    if _diagnostics_enabled():
+        sample_idx = _DIAG_CONTEXT.get("sample_idx")
+        fold_idx = _DIAG_CONTEXT.get("fold_idx")
+        print(
+            "[ROBUST][DIAG] "
+            f"sample={sample_idx} fold={fold_idx} "
+            f"strategy={cfg_payload['strategy']['name']} "
+            f"kwargs={_diag_dump(cfg_payload['strategy']['kwargs'])}",
+            flush=True,
+        )
+
     _emit_verbose_diagnostics(
         params=params,
-        base_cfg=base_cfg,
+        base_cfg=cfg_payload,
         symbol=symbol,
         interval=interval,
     )
     for call in (
-        lambda: fn(candles=data_slice, strategy_params=params, base_config=base_cfg, symbol=symbol, interval=interval, warmup_candles=warmup),
-        lambda: fn(candles=data_slice, params=params, base_config=base_cfg, symbol=symbol, interval=interval, warmup_candles=warmup),
-        lambda: fn(data=data_slice, strategy_params=params, base_config=base_cfg, symbol=symbol, interval=interval, warmup_candles=warmup),
-        lambda: fn(data=data_slice, params=params, base_config=base_cfg, symbol=symbol, interval=interval, warmup_candles=warmup),
-        lambda: fn(data_slice, params, base_config=base_cfg, symbol=symbol, interval=interval, warmup_candles=warmup),
+        lambda: fn(candles=data_slice, strategy_params=params, base_config=cfg_payload, symbol=symbol, interval=interval, warmup_candles=warmup),
+        lambda: fn(candles=data_slice, params=params, base_config=cfg_payload, symbol=symbol, interval=interval, warmup_candles=warmup),
+        lambda: fn(data=data_slice, strategy_params=params, base_config=cfg_payload, symbol=symbol, interval=interval, warmup_candles=warmup),
+        lambda: fn(data=data_slice, params=params, base_config=cfg_payload, symbol=symbol, interval=interval, warmup_candles=warmup),
+        lambda: fn(data_slice, params, base_config=cfg_payload, symbol=symbol, interval=interval, warmup_candles=warmup),
     ):
         try:
             res = call()
@@ -625,6 +642,24 @@ _SPACE_KEYS = [
 ]
 
 
+def _map_params_to_hybrid_kwargs(params: Dict[str, Any]) -> Dict[str, Any]:
+    mapping = {
+        "ema_fast": "ema_fast",
+        "ema_slow": "ema_slow",
+        "atr_len": "atr_n",
+        "sl_atr_mult": "atr_stop_mult",
+        "tp_atr_mult": "atr_trail_mult",
+        "max_trades_day": "risk_max_trades",
+        "cooldown_sec": "cooldown_after_loss_sec",
+    }
+    out: Dict[str, Any] = {}
+    for key, value in (params or {}).items():
+        mapped_key = mapping.get(key)
+        if mapped_key:
+            out[mapped_key] = value
+    return out
+
+
 def _diagnostics_enabled() -> bool:
     return os.getenv("PIPELINE_VERBOSE_DIAGNOSTICS", "").strip() in (
         "1",
@@ -686,6 +721,7 @@ def _extract_cfg_param_sources(base_cfg: Optional[Dict[str, Any]]) -> Dict[str, 
     return {
         "cfg.params": base_cfg.get("params"),
         "cfg.strategy.params": strategy.get("params") if isinstance(strategy, dict) else None,
+        "cfg.strategy.kwargs": strategy.get("kwargs") if isinstance(strategy, dict) else None,
         "cfg.strategy_config": base_cfg.get("strategy_config"),
         "cfg.strategy_kwargs": base_cfg.get("strategy_kwargs"),
         "cfg.strategy_settings": base_cfg.get("strategy_settings"),
@@ -699,6 +735,7 @@ def _pick_effective_params(params: Dict[str, Any], sources: Dict[str, Any]) -> D
         source = None
         for key in (
             "cfg.strategy.params",
+            "cfg.strategy.kwargs",
             "cfg.params",
             "cfg.strategy_config",
             "cfg.strategy_kwargs",
