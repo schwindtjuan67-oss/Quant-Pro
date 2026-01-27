@@ -39992,4 +39992,145 @@ WINDOWS=2020-09_2020-12 2021-01_2021-12 2022-01_2023-06
 [ROBUST][HB] done=32/292 passed=0 failed=32 elapsed=00:00:39 rate=0.80 params/s window=2020-09_2020-12 seed=6002 top_fails: fold 0: min_trades (1)=32, fold 1: min_trades (1)=32, fold 2: min_trades (1)=32
 [ROBUST][HB] done=96/292 passed=0 failed=96 elapsed=00:01:18 rate=1.22 params/s window=2020-09_2020-12 seed=6002 top_fails: fold 0: min_trades (1)=96, fold 1: min_trades (1)=96, fold 2: min_trades (1)=96
 [ROBUST][HB] done=160/292 passed=0 failed=160 elapsed=00:01:57 rate=1.37 params/s window=2020-09_2020-12 seed=6002 top_fails: fold 0: min_trades (1)=160, fold 1: min_trades (1)=160, fold 2: min_trades (1)=160
-^C
+^C=====================================================
+[BOOT] 27/01/2026 15:49:32,73
+ROOT=C:\Users\PC\Documents\GitHub\Quant-Pro
+DATA=datasets\SOLUSDT\1m
+WINDOWS=2020-09_2020-12 2021-01_2021-12 2022-01_2023-06
+=====================================================
+[CYCLE] seed_base=6004 seeds=6004 6005 6006
+[ROBUST] window=2020-09_2020-12 seed=6004 out=results\robust\robust_2020-09_2020-12_seed6004.json
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "C:\Users\PC\Documents\GitHub\Quant-Pro\analysis\robust_optimizer.py", line 33, in <module>
+    from backtest.run_backtest import _date_range_to_ms, _iter_candles_from_csvs
+  File "C:\Users\PC\Documents\GitHub\Quant-Pro\backtest\run_backtest.py", line 23, in <module>
+    from .backtest_runner import BacktestRunner
+  File "C:\Users\PC\Documents\GitHub\Quant-Pro\backtest\backtest_runner.py", line 312
+    _bt_print(f\"[PARAM-CHECK] {key}: expected={expected[key]} got={val} via {target}\")
+                ^
+SyntaxError: unexpected character after line continuation character
+[ROBUST] window=2020-09_2020-12 seed=6005 out=results\robust\robust_2020-09_2020-12_seed6005.json
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "C:\Users\PC\Documents\GitHub\Quant-Pro\analysis\robust_optimizer.py", line 33, in <module>
+    from backtest.run_backtest import _date_range_to_ms, _iter_candles_from_csvs
+  File "C:\Users\PC\Documents\GitHub\Quant-Pro\backtest\run_backtest.py", line 23, in <module>
+    from .backtest_runner import BacktestRunner
+  File "C:\Users\PC\Documents\GitHub\Quant-Pro\backtest\backtest_runner.py", line 312
+    _bt_print(f\"[PARAM-CHECK] {key}: expected={expected[key]} got={val} via {target}\")
+                ^
+SyntaxError: unexpected character after line continuation character
+[ROBUST] window=2020-09_2020-12 seed=6006 out=results\robust\robust_2020-09_2020-12_seed6006.json
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "C:\Users\PC\Documents\GitHub\Quant-Pro\analysis\robust_optimizer.py", line 33, in <module>
+    from backtest.run_backtest import _date_range_to_ms, _iter_candles_from_csvs
+  File "C:\Users\PC\Documents\GitHub\Quant-Pro\backtest\run_backtest.py", line 23, in <module>
+    from .backtest_runner import BacktestRunner
+  File "C:\Users\PC\Documents\GitHub\Quant-Pro\backtest\backtest_runner.py", line 312
+    _bt_print(f\"[PARAM-CHECK] {key}: expected={expected[key]} got={val} via {target}\")
+                ^
+SyntaxError: unexpected character after line continuation character
+[ROBUST] window=2021-01_2021-12 seed=6004 out=results\robust\robust_2021-01_2021-12_seed6004.json
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "C:\Users\PC\Documents\GitHub\Quant-Pro\analysis\robust_optimizer.py", line 33, in <module>
+    from backtest.run_backtest import _date_range_to_ms, _iter_candles_from_csvs
+  File "C:\Users\PC\Documents\GitHub\Quant-Pro\backtest\run_backtest.py", line 23, in <module>
+    from .backtest_runner import BacktestRunner
+  File "C:\Users\PC\Documents\GitHub\Quant-Pro\backtest\backtest_runner.py", line 312
+    _bt_print(f\"[PARAM-CHECK] {key}: expected={expected[key]} got={val} via {target}\")
+                ^
+SyntaxError: unexpected character after line continuation character
+[ROBUST] window=2021-01_2021-12 seed=6005 out=results\robust\robust_2021-01_2021-12_seed6005.json
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "C:\Users\PC\Documents\GitHub\Quant-Pro\analysis\robust_optimizer.py", line 33, in <module>
+    from backtest.run_backtest import _date_range_to_ms, _iter_candles_from_csvs
+  File "C:\Users\PC\Documents\GitHub\Quant-Pro\backtest\run_backtest.py", line 23, in <module>
+    from .backtest_runner import BacktestRunner
+  File "C:\Users\PC\Documents\GitHub\Quant-Pro\backtest\backtest_runner.py", line 312
+    _bt_print(f\"[PARAM-CHECK] {key}: expected={expected[key]} got={val} via {target}\")
+                ^
+SyntaxError: unexpected character after line continuation character
+[ROBUST] window=2021-01_2021-12 seed=6006 out=results\robust\robust_2021-01_2021-12_seed6006.json
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "C:\Users\PC\Documents\GitHub\Quant-Pro\analysis\robust_optimizer.py", line 33, in <module>
+    from backtest.run_backtest import _date_range_to_ms, _iter_candles_from_csvs
+  File "C:\Users\PC\Documents\GitHub\Quant-Pro\backtest\run_backtest.py", line 23, in <module>
+    from .backtest_runner import BacktestRunner
+  File "C:\Users\PC\Documents\GitHub\Quant-Pro\backtest\backtest_runner.py", line 312
+    _bt_print(f\"[PARAM-CHECK] {key}: expected={expected[key]} got={val} via {target}\")
+                ^
+SyntaxError: unexpected character after line continuation character
+[ROBUST] window=2022-01_2023-06 seed=6004 out=results\robust\robust_2022-01_2023-06_seed6004.json
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "C:\Users\PC\Documents\GitHub\Quant-Pro\analysis\robust_optimizer.py", line 33, in <module>
+    from backtest.run_backtest import _date_range_to_ms, _iter_candles_from_csvs
+  File "C:\Users\PC\Documents\GitHub\Quant-Pro\backtest\run_backtest.py", line 23, in <module>
+    from .backtest_runner import BacktestRunner
+  File "C:\Users\PC\Documents\GitHub\Quant-Pro\backtest\backtest_runner.py", line 312
+    _bt_print(f\"[PARAM-CHECK] {key}: expected={expected[key]} got={val} via {target}\")
+                ^
+SyntaxError: unexpected character after line continuation character
+[ROBUST] window=2022-01_2023-06 seed=6005 out=results\robust\robust_2022-01_2023-06_seed6005.json
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "C:\Users\PC\Documents\GitHub\Quant-Pro\analysis\robust_optimizer.py", line 33, in <module>
+    from backtest.run_backtest import _date_range_to_ms, _iter_candles_from_csvs
+  File "C:\Users\PC\Documents\GitHub\Quant-Pro\backtest\run_backtest.py", line 23, in <module>
+    from .backtest_runner import BacktestRunner
+  File "C:\Users\PC\Documents\GitHub\Quant-Pro\backtest\backtest_runner.py", line 312
+    _bt_print(f\"[PARAM-CHECK] {key}: expected={expected[key]} got={val} via {target}\")
+                ^
+SyntaxError: unexpected character after line continuation character
+[ROBUST] window=2022-01_2023-06 seed=6006 out=results\robust\robust_2022-01_2023-06_seed6006.json
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "C:\Users\PC\Documents\GitHub\Quant-Pro\analysis\robust_optimizer.py", line 33, in <module>
+    from backtest.run_backtest import _date_range_to_ms, _iter_candles_from_csvs
+  File "C:\Users\PC\Documents\GitHub\Quant-Pro\backtest\run_backtest.py", line 23, in <module>
+    from .backtest_runner import BacktestRunner
+  File "C:\Users\PC\Documents\GitHub\Quant-Pro\backtest\backtest_runner.py", line 312
+    _bt_print(f\"[PARAM-CHECK] {key}: expected={expected[key]} got={val} via {target}\")
+                ^
+SyntaxError: unexpected character after line continuation character
+Traceback (most recent call last):
+  File "<frozen runpy>", line 189, in _run_module_as_main
+  File "<frozen runpy>", line 159, in _get_module_details
+  File "<frozen importlib._bootstrap_external>", line 896, in get_code
+  File "<frozen importlib._bootstrap_external>", line 826, in source_to_code
+  File "<frozen importlib._bootstrap>", line 491, in _call_with_frames_removed
+  File "C:\Users\PC\Documents\GitHub\Quant-Pro\analysis\analysis_post_robust.py", line 6
+    <<<<<<< Updated upstream
+    ^^
+SyntaxError: invalid syntax
+[HEALTH][POST-A] running health check
+[HEALTH] contract_ok=False liveness_ok=False A_passed=2 faseA_count=0 faseB_count=0 stop=True reason="contract_failed"
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "C:\Users\PC\Documents\GitHub\Quant-Pro\analysis\pipeline_health.py", line 590, in <module>
+    main()
+    ~~~~^^
+  File "C:\Users\PC\Documents\GitHub\Quant-Pro\analysis\pipeline_health.py", line 586, in main
+    _log_line(args.log, line)
+    ~~~~~~~~~^^^^^^^^^^^^^^^^
+  File "C:\Users\PC\Documents\GitHub\Quant-Pro\analysis\pipeline_health.py", line 548, in _log_line
+    with open(path, "a", encoding="utf-8") as f:
+         ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: 'logs\\autoloop_ABC.log'
+[END] 27/01/2026 15:49:36,10
+[END] 27/01/2026 15:49:57,22
