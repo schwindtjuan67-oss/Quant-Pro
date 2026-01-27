@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import json
+import inspect
 from typing import Any, Dict, Optional, Tuple
 
 from Live.hybrid_scalper_pro import HybridScalperPRO
@@ -111,6 +112,10 @@ class HybridAdapterShadow:
 
         self.logger = logger
 
+        raw_kwargs = self._resolve_strategy_kwargs_from_engine()
+        expanded_kwargs = self._expand_strategy_kwargs(raw_kwargs)
+        init_kwargs, _extras = self._split_init_kwargs(expanded_kwargs)
+
         self.hybrid = HybridScalperPRO(
             symbol=self.symbol,
             router=router,
@@ -118,10 +123,11 @@ class HybridAdapterShadow:
             risk_manager=risk_manager,
             event_bus=event_bus,
             logger=logger,
+            **init_kwargs,
         )
 
         # === PATCH PIPELINE ===
-        self._apply_pipeline_params_from_engine()
+        self._apply_pipeline_overrides(expanded_kwargs)
 
         active = self._sym_state.get("active")
         if isinstance(active, dict) and active.get("params"):
@@ -134,18 +140,74 @@ class HybridAdapterShadow:
     # -----------------------
     # PATCH CORE
     # -----------------------
-    def _apply_pipeline_params_from_engine(self) -> None:
+    def _resolve_strategy_kwargs_from_engine(self) -> Dict[str, Any]:
         cfg = getattr(self.engine, "config", None)
         if not isinstance(cfg, dict):
-            return
-        params = cfg.get("params") or cfg.get("strategy_params")
-        if not isinstance(params, dict):
-            return
-        for k, v in params.items():
-            try:
-                setattr(self.hybrid, k, v)
-            except Exception:
-                pass
+            return {}
+        strategy = cfg.get("strategy")
+        if isinstance(strategy, dict) and isinstance(strategy.get("kwargs"), dict):
+            return strategy.get("kwargs") or {}
+        if isinstance(cfg.get("strategy_kwargs"), dict):
+            return cfg.get("strategy_kwargs") or {}
+        if isinstance(cfg.get("params"), dict):
+            return cfg.get("params") or {}
+        if isinstance(cfg.get("strategy_params"), dict):
+            return cfg.get("strategy_params") or {}
+        if isinstance(strategy, dict) and isinstance(strategy.get("params"), dict):
+            return strategy.get("params") or {}
+        return {}
+
+    def _expand_strategy_kwargs(self, kwargs: Dict[str, Any]) -> Dict[str, Any]:
+        mapping = {
+            "atr_len": "atr_n",
+            "sl_atr_mult": "atr_stop_mult",
+            "tp_atr_mult": "atr_trail_mult",
+            "max_trades_day": "risk_max_trades",
+            "cooldown_sec": "cooldown_after_loss_sec",
+        }
+        expanded = dict(kwargs or {})
+        for key, mapped in mapping.items():
+            if key in expanded and mapped not in expanded:
+                expanded[mapped] = expanded[key]
+        return expanded
+
+    def _split_init_kwargs(self, kwargs: Dict[str, Any]) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+        try:
+            params = inspect.signature(HybridScalperPRO.__init__).parameters
+            accepted = {k for k in params if k != "self"}
+        except Exception:
+            accepted = set()
+        init_kwargs = {k: v for k, v in (kwargs or {}).items() if k in accepted}
+        extra_kwargs = {k: v for k, v in (kwargs or {}).items() if k not in accepted}
+        return init_kwargs, extra_kwargs
+
+    def _apply_pipeline_overrides(self, kwargs: Dict[str, Any]) -> None:
+        applied = []
+        skipped = []
+        for k, v in (kwargs or {}).items():
+            if hasattr(self.hybrid, k):
+                try:
+                    setattr(self.hybrid, k, v)
+                    applied.append(k)
+                    continue
+                except Exception:
+                    pass
+            upper = k.upper()
+            if hasattr(self.hybrid, upper):
+                try:
+                    setattr(self.hybrid, upper, v)
+                    applied.append(upper)
+                    continue
+                except Exception:
+                    pass
+            skipped.append(k)
+
+        if os.getenv("PIPELINE_VERBOSE_DIAGNOSTICS", "").strip() in ("1", "true", "TRUE", "yes", "YES", "on", "ON"):
+            init_kwargs, _extras = self._split_init_kwargs(kwargs)
+            print("[ADAPTER][DIAG] strategy_kwargs=", json.dumps(kwargs, ensure_ascii=False, sort_keys=True))
+            print("[ADAPTER][DIAG] init_kwargs=", json.dumps(init_kwargs, ensure_ascii=False, sort_keys=True))
+            print("[ADAPTER][DIAG] overrides_applied=", json.dumps(sorted(set(applied)), ensure_ascii=False))
+            print("[ADAPTER][DIAG] overrides_skipped=", json.dumps(sorted(set(skipped)), ensure_ascii=False))
 
     def _inject_params_meta(self) -> None:
         if not self.logger or not hasattr(self.logger, "set_pending_meta"):
@@ -196,9 +258,15 @@ class HybridAdapterShadow:
     # -----------------------
     def _apply_params_to_hybrid(self, params: Dict[str, Any]) -> None:
         for k, v in (params or {}).items():
-            try:
-                setattr(self.hybrid, k, v)
-            except Exception:
-                pass
-
-
+            if hasattr(self.hybrid, k):
+                try:
+                    setattr(self.hybrid, k, v)
+                    continue
+                except Exception:
+                    pass
+            upper = k.upper()
+            if hasattr(self.hybrid, upper):
+                try:
+                    setattr(self.hybrid, upper, v)
+                except Exception:
+                    pass
