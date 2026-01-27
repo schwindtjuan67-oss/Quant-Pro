@@ -355,13 +355,38 @@ def make_walk_forward_splits(
 # Gates + robust aggregation
 # ============================================================
 
+def _normalize_max_drawdown_r(metrics: Dict[str, Any]) -> None:
+    if not isinstance(metrics, dict):
+        return
+    if "max_drawdown_r" not in metrics:
+        return
+    try:
+        val = float(metrics.get("max_drawdown_r"))
+    except Exception:
+        return
+    if val > 1.0:
+        metrics["max_drawdown_r"] = val / 100.0
+
+
+def _normalize_max_dd_r_value(value: Optional[float]) -> Optional[float]:
+    if value is None:
+        return None
+    try:
+        out = float(value)
+    except Exception:
+        return None
+    if out > 1.0:
+        out = out / 100.0
+    return out
+
+
 def _passes_gates(metrics: Dict[str, float], gates: Dict[str, Any]) -> Tuple[bool, str]:
     t = metrics.get("n", metrics.get("trades", 0))
     if t < gates.get("min_trades", 30):
         return False, f"min_trades ({t})"
 
     max_dd = abs(metrics.get("max_drawdown_r", 0.0))
-    if max_dd > gates.get("max_dd_r", 20.0):
+    if max_dd > gates.get("max_dd_r", 0.2):
         return False, f"max_dd_r ({max_dd:.2f})"
 
     pf = metrics.get("profit_factor", 0.0)
@@ -380,6 +405,8 @@ def check_filters(metrics: Dict[str, float], filters: Dict[str, Any]) -> Tuple[b
         inner = dict(metrics["metrics"])
         inner["trades"] = metrics.get("n", 0)
         metrics = inner
+
+    _normalize_max_drawdown_r(metrics)
 
     reasons: List[str] = []
     used_keys = ("trades", "max_drawdown_r", "profit_factor", "winrate")
@@ -426,13 +453,11 @@ def _normalize_score_fallback(mode: Optional[str]) -> str:
 
 
 def _resolve_fold_score(metrics: Dict[str, float], ok: bool, mode: str) -> float:
-    if not ok:
-        return -1e9
-    base_score = compute_score(metrics)
+    base_score = compute_score(metrics) if ok else -1e9
     mode = _normalize_score_fallback(mode)
-    if mode == "equity":
+    if base_score == -1e9 and mode == "equity":
         return float(metrics.get("equity_r", base_score))
-    if mode == "expectancy":
+    if base_score == -1e9 and mode == "expectancy":
         return float(metrics.get("expectancy", base_score))
     return base_score
 
@@ -460,6 +485,7 @@ def evaluate_params_walk_forward(
         trades_test = backtest_fn(test_data, params)
 
         m = compute_metrics_from_trades(trades_test)
+        _normalize_max_drawdown_r(m)
         ok, reasons = check_filters(m, gates)
         s = _resolve_fold_score(m, ok, score_fallback)
 
@@ -549,12 +575,14 @@ def _real_backtest_fn(
     for key, value in mapped_kwargs.items():
         strategy_kwargs.setdefault(key, value)
     cfg_payload = json.loads(json.dumps(base_cfg)) if isinstance(base_cfg, dict) else {}
+    cfg_payload.setdefault("params", {})
+    cfg_payload["params"].update(params or {})
     cfg_payload["strategy"] = {
         "name": "hybrid_scalper_pro",
         "kwargs": strategy_kwargs,
     }
     cfg_payload["strategy_kwargs"] = strategy_kwargs
-    cfg_payload["params"] = dict(params or {})
+    cfg_payload["params"] = dict(cfg_payload.get("params") or {})
     if _diagnostics_enabled():
         sample_idx = _DIAG_CONTEXT.get("sample_idx")
         fold_idx = _DIAG_CONTEXT.get("fold_idx")
@@ -881,6 +909,7 @@ def _evaluate_params_on_cached_test_slices(
             trades_test = _worker_backtest_fn(test_data, params)
 
             m = compute_metrics_from_trades(trades_test)
+            _normalize_max_drawdown_r(m)
             ok, reasons = check_filters(m, _WORKER_GATES)
             s = _resolve_fold_score(m, ok, _WORKER_SCORE_FALLBACK)
 
@@ -1057,12 +1086,15 @@ def run_robust_search(
     gates = gates or {
         "min_trades": 30,
         "min_r_obs": 200,
-        "max_dd_r": 20.0,
+        "max_dd_r": 0.2,
         "min_pf": 1.05,
         "min_winrate": 0.35,
         "lam_std": 0.75,
         "beta_worst": 0.35,
     }
+    normalized_max_dd = _normalize_max_dd_r_value(gates.get("max_dd_r"))
+    if normalized_max_dd is not None:
+        gates["max_dd_r"] = normalized_max_dd
     FAIL_COUNTS.clear()
 
     splits = make_walk_forward_splits(len(data), n_folds=n_folds, min_train=min_train, min_test=min_test)
@@ -1501,11 +1533,12 @@ def _resolve_gates(
     cli_min_r_obs: Optional[int],
     cli_min_pf: Optional[float],
     cli_min_winrate: Optional[float],
+    cli_max_dd_r: Optional[float],
 ) -> Dict[str, Any]:
     gates = {
         "min_trades": 30,
         "min_r_obs": 200,
-        "max_dd_r": 20.0,
+        "max_dd_r": 0.2,
         "min_pf": 1.05,
         "min_winrate": 0.35,
         "lam_std": 0.75,
@@ -1537,6 +1570,12 @@ def _resolve_gates(
         gates["min_pf"] = float(cli_min_pf)
     if cli_min_winrate is not None:
         gates["min_winrate"] = float(cli_min_winrate)
+    if cli_max_dd_r is not None:
+        gates["max_dd_r"] = float(cli_max_dd_r)
+
+    normalized_max_dd = _normalize_max_dd_r_value(gates.get("max_dd_r"))
+    if normalized_max_dd is not None:
+        gates["max_dd_r"] = normalized_max_dd
 
     return gates
 
@@ -1587,12 +1626,15 @@ def run_robust_search_parallel(
     gates = gates or {
         "min_trades": 30,
         "min_r_obs": 200,
-        "max_dd_r": 20.0,
+        "max_dd_r": 0.2,
         "min_pf": 1.05,
         "min_winrate": 0.35,
         "lam_std": 0.75,
         "beta_worst": 0.35,
     }
+    normalized_max_dd = _normalize_max_dd_r_value(gates.get("max_dd_r"))
+    if normalized_max_dd is not None:
+        gates["max_dd_r"] = normalized_max_dd
     FAIL_COUNTS.clear()
 
     splits = make_walk_forward_splits(len(data), n_folds=n_folds, min_train=min_train, min_test=min_test)
@@ -1830,6 +1872,7 @@ def main():
     ap.add_argument("--min-r-obs", type=int, default=None, help="override gate min_r_obs")
     ap.add_argument("--min-pf", type=float, default=None, help="override gate min_pf")
     ap.add_argument("--min-winrate", type=float, default=None, help="override gate min_winrate")
+    ap.add_argument("--max-dd-r", type=float, default=None, help="override gate max_dd_r (ratio 0..1)")
 
     # ✅ paralelo (opcionales)
     ap.add_argument("--workers", type=int, default=0, help="workers para paralelo (0=auto/env/disabled)")
@@ -1899,7 +1942,14 @@ def main():
                 base_cfg = json.load(f)
             print("[ROBUST] Using REAL backtest function (in-memory).")
 
-        gates = _resolve_gates(base_cfg, args.min_trades, args.min_r_obs, args.min_pf, args.min_winrate)
+        gates = _resolve_gates(
+            base_cfg,
+            args.min_trades,
+            args.min_r_obs,
+            args.min_pf,
+            args.min_winrate,
+            args.max_dd_r,
+        )
 
         # resolver workers
         workers = int(args.workers or 0)
@@ -2008,6 +2058,7 @@ def main():
                 "min_r_obs": int(gates.get("min_r_obs", 200)),
                 "min_pf": float(gates.get("min_pf", 1.05)),
                 "min_winrate": float(gates.get("min_winrate", 0.35)),
+                "max_dd_r": float(gates.get("max_dd_r", 0.2)),
             },
         })
         meta = _normalize_meta(meta)

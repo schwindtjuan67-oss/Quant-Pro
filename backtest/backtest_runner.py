@@ -19,6 +19,7 @@ def _expand_strategy_kwargs(kwargs: Dict[str, Any]) -> Dict[str, Any]:
     if not isinstance(kwargs, dict):
         return {}
     mapping = {
+        # Map snake_case search params to constructor-friendly names.
         "atr_len": "atr_n",
         "sl_atr_mult": "atr_stop_mult",
         "tp_atr_mult": "atr_trail_mult",
@@ -220,6 +221,33 @@ class BacktestRunner:
                 extra_kwargs = {k: v for k, v in (kwargs or {}).items() if k not in accepted}
                 return ctor_kwargs, extra_kwargs
 
+            def _apply_param_overrides(self, strategy: Any, params: Dict[str, Any]) -> None:
+                if not isinstance(params, dict):
+                    return
+                # Map snake_case params into uppercase attrs when the Hybrid expects constants.
+                # This keeps backward compatibility when __init__ doesn't expose them.
+                mapping = {
+                    "ema_fast": ("EMA_FAST",),
+                    "ema_slow": ("EMA_SLOW",),
+                    "atr_len": ("ATR_LEN", "ATR_N"),
+                    "sl_atr_mult": ("ATR_STOP_MULT", "RANGE_STOP_ATR_MULT"),
+                    "tp_atr_mult": ("ATR_TRAIL_MULT", "RANGE_TP_TO_VWAP_ATR"),
+                    "cooldown_sec": ("cooldown_after_loss_sec", "cooldown_after_win_sec", "reentry_block_sec"),
+                }
+                for key, value in params.items():
+                    if hasattr(strategy, key):
+                        try:
+                            setattr(strategy, key, value)
+                        except Exception:
+                            pass
+                        continue
+                    for mapped in mapping.get(key, ()):
+                        if hasattr(strategy, mapped):
+                            try:
+                                setattr(strategy, mapped, value)
+                            except Exception:
+                                pass
+
             def _apply_extra_kwargs(self, strategy: Any, extra: Dict[str, Any]) -> None:
                 for k, v in (extra or {}).items():
                     try:
@@ -271,6 +299,7 @@ class BacktestRunner:
                             **ctor_kwargs,
                         )
                         self._apply_extra_kwargs(strategy, extra_kwargs)
+                        self._apply_param_overrides(strategy, kwargs)
                         self._apply_legacy_params(strategy)
                         return strategy, self._resolve_strategy_handler(strategy)
                     raise ValueError(f"BacktestRunner: unsupported strategy name {name!r}")
