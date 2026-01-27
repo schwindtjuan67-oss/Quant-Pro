@@ -184,6 +184,15 @@ class HybridAdapterShadow:
     def _apply_pipeline_overrides(self, kwargs: Dict[str, Any]) -> None:
         applied = []
         skipped = []
+        mapping = {
+            # Map snake_case params into uppercase attrs when HybridScalperPRO stores constants.
+            "ema_fast": ("EMA_FAST",),
+            "ema_slow": ("EMA_SLOW",),
+            "atr_len": ("ATR_LEN", "ATR_N"),
+            "sl_atr_mult": ("ATR_STOP_MULT", "RANGE_STOP_ATR_MULT"),
+            "tp_atr_mult": ("ATR_TRAIL_MULT", "RANGE_TP_TO_VWAP_ATR"),
+            "cooldown_sec": ("cooldown_after_loss_sec", "cooldown_after_win_sec", "reentry_block_sec"),
+        }
         for k, v in (kwargs or {}).items():
             if hasattr(self.hybrid, k):
                 try:
@@ -200,6 +209,14 @@ class HybridAdapterShadow:
                     continue
                 except Exception:
                     pass
+            for mapped in mapping.get(k, ()):
+                if hasattr(self.hybrid, mapped):
+                    try:
+                        setattr(self.hybrid, mapped, v)
+                        applied.append(mapped)
+                        break
+                    except Exception:
+                        pass
             skipped.append(k)
 
         if os.getenv("PIPELINE_VERBOSE_DIAGNOSTICS", "").strip() in ("1", "true", "TRUE", "yes", "YES", "on", "ON"):
