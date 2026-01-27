@@ -695,6 +695,8 @@ def _real_backtest_fn(
     for key, value in mapped_kwargs.items():
         strategy_kwargs.setdefault(key, value)
     cfg_payload = json.loads(json.dumps(base_cfg)) if isinstance(base_cfg, dict) else {}
+    # En PIPELINE/BACKTEST aseguramos cfg.params con los sample_params
+    # para que la estrategia los pueda leer sin depender del schema base.
     cfg_payload.setdefault("params", {})
     cfg_payload["params"].update(params or {})
     cfg_payload["strategy"] = {
@@ -804,6 +806,8 @@ _SPACE_KEYS = [
 
 
 def _map_params_to_hybrid_kwargs(params: Dict[str, Any]) -> Dict[str, Any]:
+    # Map snake_case search params to HybridScalperPRO __init__ kwargs.
+    # ema_fast/ema_slow match the signature directly (Live/hybrid_scalper_pro.py).
     mapping = {
         "ema_fast": "ema_fast",
         "ema_slow": "ema_slow",

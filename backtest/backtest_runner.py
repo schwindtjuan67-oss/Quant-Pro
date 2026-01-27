@@ -9,6 +9,7 @@ import inspect
 
 os.environ["QS_BACKTEST"] = "1"
 RUN_MODE = os.getenv("RUN_MODE", "LIVE").upper().strip()
+PIPELINE_MODES = {"PIPELINE", "BACKTEST"}
 PIPELINE_VERBOSE_DIAGNOSTICS = os.getenv("PIPELINE_VERBOSE_DIAGNOSTICS", "0").strip().lower() in ("1", "true", "yes")
 PIPELINE_DISABLE_GPU = RUN_MODE == "PIPELINE" and os.getenv("PIPELINE_DISABLE_GPU", "0").strip().lower() in ("1", "true", "yes")
 
@@ -21,7 +22,8 @@ def _expand_strategy_kwargs(kwargs: Dict[str, Any]) -> Dict[str, Any]:
     if not isinstance(kwargs, dict):
         return {}
     mapping = {
-        # Map snake_case search params to constructor-friendly names.
+        # Map snake_case search params to HybridScalperPRO __init__ kwargs.
+        # ema_fast / ema_slow match directly (see Live/hybrid_scalper_pro.py).
         "atr_len": "atr_n",
         "sl_atr_mult": "atr_stop_mult",
         "tp_atr_mult": "atr_trail_mult",
@@ -197,6 +199,8 @@ class BacktestRunner:
                 if not isinstance(cfg, dict):
                     return {}
                 strategy = cfg.get("strategy")
+                if RUN_MODE in PIPELINE_MODES:
+                    self._merge_pipeline_params(cfg)
                 if isinstance(strategy, dict) and isinstance(strategy.get("kwargs"), dict):
                     return _expand_strategy_kwargs(strategy.get("kwargs") or {})
                 if isinstance(cfg.get("strategy_kwargs"), dict):
@@ -208,6 +212,29 @@ class BacktestRunner:
                 if isinstance(strategy, dict) and isinstance(strategy.get("params"), dict):
                     return _expand_strategy_kwargs(strategy.get("params") or {})
                 return {}
+
+            def _merge_pipeline_params(self, cfg: Dict[str, Any]) -> None:
+                # En PIPELINE/BACKTEST aseguramos que cfg.params incluya overrides
+                # para que la estrategia los pueda leer sin depender del schema.
+                if not isinstance(cfg, dict):
+                    return
+                if not isinstance(cfg.get("params"), dict):
+                    cfg["params"] = {}
+                params_bucket = cfg["params"]
+                if not isinstance(params_bucket, dict):
+                    return
+                strategy = cfg.get("strategy")
+                merge_sources: List[Dict[str, Any]] = []
+                for key in ("strategy_params", "strategy_kwargs"):
+                    if isinstance(cfg.get(key), dict):
+                        merge_sources.append(cfg[key])
+                if isinstance(strategy, dict):
+                    if isinstance(strategy.get("params"), dict):
+                        merge_sources.append(strategy["params"])
+                    if isinstance(strategy.get("kwargs"), dict):
+                        merge_sources.append(strategy["kwargs"])
+                for src in merge_sources:
+                    params_bucket.update(src)
 
             def _split_kwargs(
                 self,
@@ -248,6 +275,41 @@ class BacktestRunner:
                                 setattr(strategy, mapped, value)
                             except Exception:
                                 pass
+
+            def _self_check_params(self, strategy: Any, expected: Dict[str, Any]) -> None:
+                if RUN_MODE not in PIPELINE_MODES:
+                    return
+                if os.getenv("PIPELINE_PARAM_SELF_CHECK", "0").strip().lower() not in ("1", "true", "yes"):
+                    return
+                if not isinstance(expected, dict):
+                    return
+                checks = {
+                    "ema_fast": ("EMA_FAST", "ema_fast"),
+                    "ema_slow": ("EMA_SLOW", "ema_slow"),
+                    "atr_len": ("ATR_N", "atr_n"),
+                    "sl_atr_mult": ("ATR_STOP_MULT", "atr_stop_mult"),
+                    "tp_atr_mult": ("ATR_TRAIL_MULT", "atr_trail_mult"),
+                    "max_trades_day": ("risk_max_trades",),
+                    "cooldown_sec": ("cooldown_after_loss_sec", "cooldown_after_win_sec", "reentry_block_sec"),
+                }
+                for key, attrs in checks.items():
+                    if key not in expected:
+                        continue
+                    target = None
+                    for attr in attrs:
+                        if hasattr(strategy, attr):
+                            target = attr
+                            break
+                    if not target:
+                        _bt_print(f"[PARAM-CHECK] {key}: no target attr found")
+                        continue
+                    try:
+                        val = getattr(strategy, target)
+                    except Exception:
+                        _bt_print(f"[PARAM-CHECK] {key}: failed to read attr {target}")
+                        continue
+                    if val != expected[key]:
+                        _bt_print(f\"[PARAM-CHECK] {key}: expected={expected[key]} got={val} via {target}\")
 
             def _apply_extra_kwargs(self, strategy: Any, extra: Dict[str, Any]) -> None:
                 for k, v in (extra or {}).items():
@@ -302,6 +364,7 @@ class BacktestRunner:
                         self._apply_extra_kwargs(strategy, extra_kwargs)
                         self._apply_param_overrides(strategy, kwargs)
                         self._apply_legacy_params(strategy)
+                        self._self_check_params(strategy, kwargs)
                         return strategy, self._resolve_strategy_handler(strategy)
                     raise ValueError(f"BacktestRunner: unsupported strategy name {name!r}")
 
