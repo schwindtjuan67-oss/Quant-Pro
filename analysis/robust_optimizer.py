@@ -419,13 +419,22 @@ def aggregate_fold_scores(
     return mean_s - lam_std * std_s + beta_worst * worst_s
 
 
-def _apply_score_fallback(score: float, metrics: Dict[str, float], mode: str) -> float:
-    if score <= -1e9 or score == -1000000000.0:
-        if mode == "equity":
-            return float(metrics.get("equity_r", score))
-        if mode == "expectancy":
-            return float(metrics.get("expectancy", score))
-    return score
+def _normalize_score_fallback(mode: Optional[str]) -> str:
+    if mode in ("equity", "expectancy", "none"):
+        return str(mode)
+    return "none"
+
+
+def _resolve_fold_score(metrics: Dict[str, float], ok: bool, mode: str) -> float:
+    if not ok:
+        return -1e9
+    base_score = compute_score(metrics)
+    mode = _normalize_score_fallback(mode)
+    if mode == "equity":
+        return float(metrics.get("equity_r", base_score))
+    if mode == "expectancy":
+        return float(metrics.get("expectancy", base_score))
+    return base_score
 
 
 def evaluate_params_walk_forward(
@@ -452,8 +461,7 @@ def evaluate_params_walk_forward(
 
         m = compute_metrics_from_trades(trades_test)
         ok, reasons = check_filters(m, gates)
-        s = compute_score(m)
-        s = _apply_score_fallback(s, m, score_fallback)
+        s = _resolve_fold_score(m, ok, score_fallback)
 
         fold_results.append(FoldResult(fold_id=i, metrics=m, score=s))
         if not ok:
@@ -536,12 +544,17 @@ def _real_backtest_fn(
     last_err: Optional[Exception] = None
 
     # Probar firmas comunes sin romper
-    strategy_kwargs = _map_params_to_hybrid_kwargs(params)
+    strategy_kwargs = dict(params or {})
+    mapped_kwargs = _map_params_to_hybrid_kwargs(params)
+    for key, value in mapped_kwargs.items():
+        strategy_kwargs.setdefault(key, value)
     cfg_payload = json.loads(json.dumps(base_cfg)) if isinstance(base_cfg, dict) else {}
     cfg_payload["strategy"] = {
         "name": "hybrid_scalper_pro",
         "kwargs": strategy_kwargs,
     }
+    cfg_payload["strategy_kwargs"] = strategy_kwargs
+    cfg_payload["params"] = dict(params or {})
     if _diagnostics_enabled():
         sample_idx = _DIAG_CONTEXT.get("sample_idx")
         fold_idx = _DIAG_CONTEXT.get("fold_idx")
@@ -734,11 +747,11 @@ def _pick_effective_params(params: Dict[str, Any], sources: Dict[str, Any]) -> D
     else:
         source = None
         for key in (
-            "cfg.strategy.params",
             "cfg.strategy.kwargs",
-            "cfg.params",
-            "cfg.strategy_config",
             "cfg.strategy_kwargs",
+            "cfg.params",
+            "cfg.strategy.params",
+            "cfg.strategy_config",
             "cfg.strategy_settings",
         ):
             candidate = sources.get(key)
@@ -803,7 +816,7 @@ def _worker_init(
     _WORKER_GATES = gates or {}
     _WORKER_SPLITS = splits or []
     _WORKER_USE_DUMMY = bool(use_dummy)
-    _WORKER_SCORE_FALLBACK = score_fallback
+    _WORKER_SCORE_FALLBACK = _normalize_score_fallback(score_fallback)
     if isinstance(diag_context, dict) and _diagnostics_enabled():
         _DIAG_STATIC_CONTEXT.clear()
         _DIAG_STATIC_CONTEXT.update(diag_context)
@@ -869,8 +882,7 @@ def _evaluate_params_on_cached_test_slices(
 
             m = compute_metrics_from_trades(trades_test)
             ok, reasons = check_filters(m, _WORKER_GATES)
-            s = compute_score(m)
-            s = _apply_score_fallback(s, m, _WORKER_SCORE_FALLBACK)
+            s = _resolve_fold_score(m, ok, _WORKER_SCORE_FALLBACK)
 
             fold_results.append(FoldResult(fold_id=i, metrics=m, score=s))
             if not ok:
@@ -1840,7 +1852,7 @@ def main():
         "samples": int(args.samples),
         "min_train": int(args.min_train),
         "min_test": int(args.min_test),
-        "score_fallback": args.score_fallback,
+        "score_fallback": _normalize_score_fallback(args.score_fallback),
     }
 
     try:
@@ -1986,6 +1998,7 @@ def main():
         meta.update({
             "pipeline_phase": _phase,
             "space_keys": sorted(list(_space.keys())),
+            "strategy_kwargs_effective": sorted(_SPACE_KEYS),
             "workers": int(workers),
             "batch_size": int(batch_size),
             "folds": int(folds),
@@ -2023,4 +2036,9 @@ def main():
 
 
 if __name__ == "__main__":
+    # Manual tests (examples):
+    #   python3 analysis/robust_optimizer.py --data datasets/BTCUSDT --window 2023-01_2023-03 \
+    #     --base-config configs/pipeline_research_backtest.json --samples 2 --folds 2 --score-fallback equity
+    #   PIPELINE_VERBOSE_DIAGNOSTICS=1 python3 analysis/robust_optimizer.py --data datasets/BTCUSDT --window 2023-01_2023-03 \
+    #     --base-config configs/pipeline_research_backtest.json --samples 1 --folds 1 --score-fallback expectancy
     main()

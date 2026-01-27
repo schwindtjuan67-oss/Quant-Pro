@@ -15,6 +15,22 @@ def _bt_print(msg: str) -> None:
     if RUN_MODE != "PIPELINE" or PIPELINE_VERBOSE_DIAGNOSTICS:
         print(msg)
 
+def _expand_strategy_kwargs(kwargs: Dict[str, Any]) -> Dict[str, Any]:
+    if not isinstance(kwargs, dict):
+        return {}
+    mapping = {
+        "atr_len": "atr_n",
+        "sl_atr_mult": "atr_stop_mult",
+        "tp_atr_mult": "atr_trail_mult",
+        "max_trades_day": "risk_max_trades",
+        "cooldown_sec": "cooldown_after_loss_sec",
+    }
+    expanded = dict(kwargs)
+    for key, mapped in mapping.items():
+        if key in kwargs and mapped not in expanded:
+            expanded[mapped] = kwargs[key]
+    return expanded
+
 # ------------------------------------------------------------
 # GPU feeder (opcional)
 # ------------------------------------------------------------
@@ -167,12 +183,28 @@ class BacktestRunner:
                     return None, {}
                 strategy = cfg.get("strategy")
                 if not isinstance(strategy, dict):
-                    return None, {}
+                    return None, self._resolve_strategy_kwargs(cfg)
                 name = str(strategy.get("name") or "").strip()
                 if not name:
-                    return None, {}
-                kwargs = strategy.get("kwargs") if isinstance(strategy.get("kwargs"), dict) else {}
+                    return None, self._resolve_strategy_kwargs(cfg)
+                kwargs = self._resolve_strategy_kwargs(cfg)
                 return name, kwargs
+
+            def _resolve_strategy_kwargs(self, cfg: Dict[str, Any]) -> Dict[str, Any]:
+                if not isinstance(cfg, dict):
+                    return {}
+                strategy = cfg.get("strategy")
+                if isinstance(strategy, dict) and isinstance(strategy.get("kwargs"), dict):
+                    return _expand_strategy_kwargs(strategy.get("kwargs") or {})
+                if isinstance(cfg.get("strategy_kwargs"), dict):
+                    return _expand_strategy_kwargs(cfg.get("strategy_kwargs") or {})
+                if isinstance(cfg.get("params"), dict):
+                    return _expand_strategy_kwargs(cfg.get("params") or {})
+                if isinstance(cfg.get("strategy_params"), dict):
+                    return _expand_strategy_kwargs(cfg.get("strategy_params") or {})
+                if isinstance(strategy, dict) and isinstance(strategy.get("params"), dict):
+                    return _expand_strategy_kwargs(strategy.get("params") or {})
+                return {}
 
             def _split_kwargs(
                 self,
@@ -198,6 +230,11 @@ class BacktestRunner:
             def _apply_legacy_params(self, strategy: Any) -> None:
                 cfg = getattr(self, "config", None)
                 if not isinstance(cfg, dict):
+                    return
+                if (
+                    isinstance(cfg.get("strategy"), dict)
+                    and isinstance(cfg["strategy"].get("kwargs"), dict)
+                ) or isinstance(cfg.get("strategy_kwargs"), dict) or isinstance(cfg.get("params"), dict):
                     return
                 params = {}
                 if isinstance(cfg.get("strategy_params"), dict):
