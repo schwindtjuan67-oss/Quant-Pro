@@ -5,6 +5,8 @@ from typing import Any, Dict, List, Optional, Tuple
 import os
 import inspect
 
+# Fase A -> B handoff contract
+
 os.environ["QS_BACKTEST"] = "1"
 RUN_MODE = os.getenv("RUN_MODE", "LIVE").upper().strip()
 PIPELINE_VERBOSE_DIAGNOSTICS = os.getenv("PIPELINE_VERBOSE_DIAGNOSTICS", "0").strip().lower() in ("1", "true", "yes")
@@ -240,7 +242,6 @@ class BacktestRunner:
                             setattr(strategy, key, value)
                         except Exception:
                             pass
-                        continue
                     for mapped in mapping.get(key, ()):
                         if hasattr(strategy, mapped):
                             try:
