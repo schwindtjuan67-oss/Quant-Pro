@@ -8,6 +8,8 @@ from typing import Any, Dict, Optional, Tuple
 from Live.hybrid_scalper_pro import HybridScalperPRO
 from analysis.config_state_store import ConfigStateStore
 
+# Fase A -> B handoff contract
+
 BASE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(BASE)
 DEFAULT_STATE_PATH = os.path.join(ROOT, "logs", "hotswap_state.json")
@@ -194,11 +196,12 @@ class HybridAdapterShadow:
             "cooldown_sec": ("cooldown_after_loss_sec", "cooldown_after_win_sec", "reentry_block_sec"),
         }
         for k, v in (kwargs or {}).items():
+            applied_any = False
             if hasattr(self.hybrid, k):
                 try:
                     setattr(self.hybrid, k, v)
                     applied.append(k)
-                    continue
+                    applied_any = True
                 except Exception:
                     pass
             upper = k.upper()
@@ -206,7 +209,7 @@ class HybridAdapterShadow:
                 try:
                     setattr(self.hybrid, upper, v)
                     applied.append(upper)
-                    continue
+                    applied_any = True
                 except Exception:
                     pass
             for mapped in mapping.get(k, ()):
@@ -214,10 +217,12 @@ class HybridAdapterShadow:
                     try:
                         setattr(self.hybrid, mapped, v)
                         applied.append(mapped)
+                        applied_any = True
                         break
                     except Exception:
                         pass
-            skipped.append(k)
+            if not applied_any:
+                skipped.append(k)
 
         if os.getenv("PIPELINE_VERBOSE_DIAGNOSTICS", "").strip() in ("1", "true", "TRUE", "yes", "YES", "on", "ON"):
             init_kwargs, _extras = self._split_init_kwargs(kwargs)

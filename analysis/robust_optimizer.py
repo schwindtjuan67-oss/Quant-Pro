@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # robust_optimizer.py
+# Fase A -> B handoff contract
 from __future__ import annotations
 
 
@@ -29,7 +30,7 @@ import numpy as np
 from concurrent.futures import ProcessPoolExecutor, as_completed, TimeoutError as FuturesTimeoutError  # ✅ FIX: timeout correcto
 
 # Reutilizamos helpers existentes (pero NO dependemos exclusivamente del iterador)
-from backtest.run_backtest import _date_range_to_ms, _iter_candles_from_csvs, _list_csv_files
+from backtest.run_backtest import _date_range_to_ms, _iter_candles_from_csvs
 
 from analysis.feature_cache import FeatureCache, set_active_cache
 from analysis.grid_metrics import compute_metrics_from_trades, compute_score
@@ -237,13 +238,126 @@ def _iter_candles_from_simple_csv(
 # Dataset loader (CSV) + fallback (pkl)
 # ============================================================
 
+def _path_has_segment(path: str, segment: str) -> bool:
+    parts = os.path.normpath(path).split(os.sep)
+    return any(p == segment for p in parts)
+
+
+def _discover_data_files(data_path: str, interval: Optional[str] = None) -> Dict[str, Any]:
+    interval = str(interval).strip() if interval else ""
+    payload = {
+        "input_path": data_path,
+        "interval": interval or None,
+        "interval_dir": None,
+        "found_csv": 0,
+        "found_pkl": 0,
+        "selected_kind": None,
+        "selected_files": [],
+    }
+
+    if os.path.isfile(data_path):
+        ext = os.path.splitext(data_path)[1].lower()
+        if ext in (".csv",):
+            payload["found_csv"] = 1
+            payload["selected_kind"] = "csv"
+            payload["selected_files"] = [data_path]
+            return payload
+        if ext in (".pkl", ".pickle"):
+            payload["found_pkl"] = 1
+            payload["selected_kind"] = "pkl"
+            payload["selected_files"] = [data_path]
+            return payload
+        raise RuntimeError(f"[ROBUST] Unsupported file extension: {ext}")
+
+    if not os.path.isdir(data_path):
+        raise RuntimeError(f"[ROBUST] Data path not found: {data_path}")
+
+    scan_root = data_path
+    if interval:
+        interval_dir = os.path.join(data_path, interval)
+        if os.path.isdir(interval_dir):
+            scan_root = interval_dir
+            payload["interval_dir"] = interval_dir
+
+    csv_files: List[str] = []
+    pkl_files: List[str] = []
+    for root, _dirs, files in os.walk(scan_root):
+        for name in files:
+            lower = name.lower()
+            full = os.path.join(root, name)
+            if lower.endswith(".csv"):
+                csv_files.append(full)
+            elif lower.endswith((".pkl", ".pickle")):
+                pkl_files.append(full)
+
+    if interval and scan_root == data_path:
+        interval_csv = [fp for fp in csv_files if _path_has_segment(fp, interval)]
+        interval_pkl = [fp for fp in pkl_files if _path_has_segment(fp, interval)]
+        if interval_csv or interval_pkl:
+            csv_files = interval_csv
+            pkl_files = interval_pkl
+
+    payload["found_csv"] = len(csv_files)
+    payload["found_pkl"] = len(pkl_files)
+
+    if csv_files:
+        payload["selected_kind"] = "csv"
+        payload["selected_files"] = sorted(csv_files)
+        return payload
+    if pkl_files:
+        payload["selected_kind"] = "pkl"
+        payload["selected_files"] = sorted(pkl_files)
+        return payload
+
+    return payload
+
+
+def _log_data_spec(data_spec: Dict[str, Any]) -> None:
+    selected = data_spec.get("selected_files") or []
+    interval = data_spec.get("interval")
+    interval_dir = data_spec.get("interval_dir")
+    print(
+        "[ROBUST][DATA] "
+        f"input={data_spec.get('input_path')} interval={interval or '-'} interval_dir={interval_dir or '-'} "
+        f"found_csv={data_spec.get('found_csv', 0)} found_pkl={data_spec.get('found_pkl', 0)} "
+        f"selected_kind={data_spec.get('selected_kind') or '-'} selected_files={len(selected)}",
+        flush=True,
+    )
+    for fp in selected:
+        print(f"[ROBUST][DATA] selected: {fp}", flush=True)
+
+
+def _describe_candle_range(candles: List[Dict[str, Any]]) -> Tuple[Optional[int], Optional[int]]:
+    if not candles:
+        return None, None
+    ts_values = []
+    for c in candles:
+        ts = _pick_ts_ms(c)
+        if ts is not None:
+            ts_values.append(ts)
+    if not ts_values:
+        return None, None
+    return min(ts_values), max(ts_values)
+
+
 def load_candles_from_path(
     data_path: str,
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
     debug: bool = False,
+    interval: Optional[str] = None,
+    data_spec: Optional[Dict[str, Any]] = None,
 ) -> List[Dict[str, Any]]:
-    files = _list_csv_files(data_path)
+    data_spec = data_spec or _discover_data_files(data_path, interval=interval)
+    _log_data_spec(data_spec)
+    selected = data_spec.get("selected_files") or []
+    if not selected:
+        raise RuntimeError(f"[ROBUST] No CSVs (ni PKL) encontrados en: {data_path}")
+
+    if data_spec.get("selected_kind") == "csv":
+        files = list(selected)
+    else:
+        files = []
     if files:
         start_ms, end_ms = _date_range_to_ms(date_from, date_to)
 
@@ -299,23 +413,29 @@ def load_candles_from_path(
                 for k in sorted(ym):
                     print(f"  {k}: {ym[k]}")
 
+        range_min, range_max = _describe_candle_range(candles)
+        if range_min is not None and range_max is not None:
+            print(
+                f"[ROBUST][DATA] candles_range={_ms_to_iso(range_min)} -> {_ms_to_iso(range_max)}",
+                flush=True,
+            )
         return candles
 
-    # fallback pkl/pickle (opcional)
-    if os.path.isdir(data_path):
-        pkl_files = sorted(
-            os.path.join(data_path, f)
-            for f in os.listdir(data_path)
-            if f.endswith(".pkl") or f.endswith(".pickle")
-        )
-        if pkl_files:
-            data: List[Dict[str, Any]] = []
-            for fp in pkl_files:
-                with open(fp, "rb") as f:
-                    part = pickle.load(f)
-                    if isinstance(part, list):
-                        data.extend(part)
-            return data
+    if data_spec.get("selected_kind") == "pkl":
+        pkl_files = list(selected)
+        data: List[Dict[str, Any]] = []
+        for fp in pkl_files:
+            with open(fp, "rb") as f:
+                part = pickle.load(f)
+                if isinstance(part, list):
+                    data.extend(part)
+        range_min, range_max = _describe_candle_range(data)
+        if range_min is not None and range_max is not None:
+            print(
+                f"[ROBUST][DATA] candles_range={_ms_to_iso(range_min)} -> {_ms_to_iso(range_max)}",
+                flush=True,
+            )
+        return data
 
     raise RuntimeError(f"[ROBUST] No CSVs (ni PKL) encontrados en: {data_path}")
 
@@ -1820,22 +1940,89 @@ def _load_survivor_params(path: str) -> List[Dict[str, Any]]:
     return uniq
 
 
-def _save_survivors(path: str, results: List[EvalResult], meta: Optional[Dict[str, Any]] = None) -> None:
-    meta_payload = _normalize_meta(meta)
-    payload = []
-    for r in results:
-        if not r.passed:
-            continue
-        payload.append({
-            "params": r.params,
-            "robust_score": r.robust_score,
-            "agg": r.agg,
-            "folds": [
-                {"fold_id": fr.fold_id, "score": fr.score, "metrics": fr.metrics}
-                for fr in r.fold_results
-            ],
-            "meta": meta_payload,
+def _folds_summary_from_result(result: EvalResult) -> List[Dict[str, Any]]:
+    summary = []
+    for fr in result.fold_results:
+        metrics = fr.metrics or {}
+        summary.append({
+            "fold_id": fr.fold_id,
+            "trades": metrics.get("trades", metrics.get("n", 0)),
+            "equity_r": metrics.get("equity_r", 0.0),
+            "max_drawdown_r": metrics.get("max_drawdown_r", 0.0),
+            "sortino": metrics.get("sortino", 0.0),
+            "expectancy": metrics.get("expectancy", 0.0),
+            "profit_factor": metrics.get("profit_factor", 0.0),
+            "winrate": metrics.get("winrate", 0.0),
+            "avg_trade_duration": metrics.get("avg_trade_duration", 0.0),
         })
+    return summary
+
+
+# Example survivors.json (mini)
+# {
+#   "meta": {"created_at_iso": "2024-01-01T00:00:00+00:00", "symbol": "SOLUSDT", "interval": "1m", "window": "2021-01_2021-06"},
+#   "survivors": [
+#     {"rank": 1, "robust_score": 12.34, "params": {"ema_fast": 9}, "agg": {"robust_score": 12.34},
+#      "folds_summary": [{"fold_id": 0, "trades": 120, "equity_r": 4.2, "max_drawdown_r": 0.12,
+#                         "sortino": 1.4, "expectancy": 0.03, "profit_factor": 1.2,
+#                         "winrate": 0.45, "avg_trade_duration": 90.0}]}
+#   ],
+#   "rejected_top": [{"rank": 1, "robust_score": -3.0, "params": {"ema_fast": 5}, "fail_reason": ["min_pf (0.9)"]}]
+# }
+def _build_survivors_payload(
+    results: List[EvalResult],
+    meta: Optional[Dict[str, Any]],
+    rejected_top: int = 0,
+) -> Dict[str, Any]:
+    meta_payload = _normalize_meta(meta)
+    meta_payload.setdefault("created_at_iso", datetime.now(timezone.utc).isoformat())
+
+    passed_sorted = sorted(
+        (r for r in results if r.passed),
+        key=lambda r: (r.robust_score, r.agg.get("score_worst", -1e9), -r.agg.get("score_std", 1e9)),
+        reverse=True,
+    )
+    survivors = []
+    for idx, r in enumerate(passed_sorted, start=1):
+        survivors.append({
+            "rank": idx,
+            "robust_score": float(r.robust_score),
+            "params": r.params,
+            "agg": r.agg,
+            "folds_summary": _folds_summary_from_result(r),
+        })
+
+    payload: Dict[str, Any] = {
+        "meta": meta_payload,
+        "survivors": survivors,
+    }
+
+    if rejected_top and rejected_top > 0:
+        rejected_sorted = sorted(
+            (r for r in results if not r.passed),
+            key=lambda r: (r.robust_score, r.agg.get("score_worst", -1e9), -r.agg.get("score_std", 1e9)),
+            reverse=True,
+        )
+        rejected_payload = []
+        for idx, r in enumerate(rejected_sorted[:rejected_top], start=1):
+            rejected_payload.append({
+                "rank": idx,
+                "robust_score": float(r.robust_score),
+                "params": r.params,
+                "fail_reason": _normalize_fail_reasons(r.fail_reason),
+            })
+        payload["rejected_top"] = rejected_payload
+
+    return payload
+
+
+def _save_survivors(
+    path: str,
+    results: List[EvalResult],
+    meta: Optional[Dict[str, Any]] = None,
+    rejected_top: int = 0,
+) -> None:
+    payload = _build_survivors_payload(results, meta, rejected_top=rejected_top)
     _atomic_write_json(path, payload)
 
 
@@ -1881,6 +2068,7 @@ def main():
     # ✅ NUEVO: batch-size explícito (sin obligarte a usar env)
     ap.add_argument("--batch-size", type=int, default=0, help="batch params por task (0=auto/env default 8)")
     ap.add_argument("--save-survivors", default=None, help="path JSON para guardar survivors (SEARCH)")
+    ap.add_argument("--save-survivors-rejected-top", type=int, default=0, help="top N rechazados a incluir en survivors.json")
     ap.add_argument("--revalidate", default=None, help="path JSON con survivors para revalidar (solo evalúa esos params)")
     ap.add_argument("--score-fallback", choices=("none", "equity", "expectancy"), default="none")
 
@@ -1919,11 +2107,14 @@ def main():
         print("[ROBUST] loading dataset...")
         print(f"[ROBUST] date_from={date_from} date_to={date_to} window={args.window!r}")
 
+        data_spec = _discover_data_files(args.data, interval=args.interval)
         data = load_candles_from_path(
             args.data,
             date_from=date_from,
             date_to=date_to,
             debug=bool(args.debug_loader),
+            interval=args.interval,
+            data_spec=data_spec,
         )
         print(f"[ROBUST] data size = {len(data)}")
 
@@ -1941,6 +2132,7 @@ def main():
             with open(args.base_config, "r", encoding="utf-8") as f:
                 base_cfg = json.load(f)
             print("[ROBUST] Using REAL backtest function (in-memory).")
+            meta["base_config_path"] = args.base_config
 
         gates = _resolve_gates(
             base_cfg,
@@ -2045,6 +2237,9 @@ def main():
         # meta audit: qué phase y qué keys se samplearon (crítico para congelar A→B)
         _phase = normalize_phase(None)
         _space = param_space_for_phase(_phase)
+        data_spec_payload = dict(data_spec)
+        data_spec_payload["date_from"] = date_from
+        data_spec_payload["date_to"] = date_to
         meta.update({
             "pipeline_phase": _phase,
             "space_keys": sorted(list(_space.keys())),
@@ -2053,6 +2248,7 @@ def main():
             "batch_size": int(batch_size),
             "folds": int(folds),
             "mode": "revalidate" if revalidate_params else "search",
+            "data_spec": data_spec_payload,
             "gates": {
                 "min_trades": int(gates.get("min_trades", 30)),
                 "min_r_obs": int(gates.get("min_r_obs", 200)),
@@ -2068,7 +2264,12 @@ def main():
         else:
             save_results_json(out_path, top_results, meta=meta)
             if args.save_survivors:
-                _save_survivors(args.save_survivors, all_results, meta=meta)
+                _save_survivors(
+                    args.save_survivors,
+                    all_results,
+                    meta=meta,
+                    rejected_top=int(args.save_survivors_rejected_top or 0),
+                )
         print(f"[ROBUST] saved -> {out_path}")
     except Exception as e:
         import traceback
