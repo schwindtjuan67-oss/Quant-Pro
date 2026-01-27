@@ -368,7 +368,7 @@ def _stagec_summary(paths: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def build_health_report(root: str) -> Dict[str, Any]:
+def build_health_report(root: str, stale_seconds: int = 300) -> Dict[str, Any]:
     paths = detect_latest_files(root)
 
     robust_path = paths.get("robust_json")
@@ -403,16 +403,12 @@ def build_health_report(root: str) -> Dict[str, Any]:
 
     stagec_summary = _stagec_summary(paths)
 
-    contract_ok_a = (
+    contract_ok = (
         latest_robust_ok
         and latest_robust_passed_count > 0
         and fasea_ok
         and fasea_count > 0
     )
-    contract_ok_b = True
-    if faseb_validation is not None:
-        contract_ok_b = bool(faseb_validation.get("ok")) and (faseb_count or 0) > 0
-    contract_ok = contract_ok_a and contract_ok_b
 
     a_ran = robust_path is not None
     b_ran = faseb_path is not None
@@ -428,12 +424,19 @@ def build_health_report(root: str) -> Dict[str, Any]:
         liveness_ok = False
 
     warnings: List[str] = []
+    warning_fasea_stale = False
+    warning_fasea_stale_delta: Optional[int] = None
     robust_mtime = paths.get("robust_json_mtime")
     fasea_mtime = paths.get("faseA_promoted_mtime")
     if robust_mtime and fasea_mtime:
         delta_sec = robust_mtime - fasea_mtime
-        if delta_sec > 600:
-            warnings.append(f"faseA_promoted_stale:delta_sec={int(delta_sec)}")
+        if delta_sec > stale_seconds:
+            warning_fasea_stale = True
+            warning_fasea_stale_delta = int(delta_sec)
+            warnings.append(
+                f"faseA_promoted_stale:delta_sec={warning_fasea_stale_delta}"
+                f":threshold_sec={int(stale_seconds)}"
+            )
 
     report = {
         "ts_utc": _utc_now().isoformat(),
@@ -460,6 +463,9 @@ def build_health_report(root: str) -> Dict[str, Any]:
         "contract_ok": contract_ok,
         "liveness_ok": liveness_ok,
         "warnings": warnings,
+        "warning_faseA_stale": warning_fasea_stale,
+        "warning_faseA_stale_delta_seconds": warning_fasea_stale_delta,
+        "stale_seconds": int(stale_seconds),
     }
 
     return report
@@ -498,12 +504,14 @@ def _write_json(path: str, payload: Dict[str, Any]) -> None:
 
 
 def _write_stop_file(path: str, report: Dict[str, Any], reason: str) -> None:
-    if os.path.exists(path):
-        return
     os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
     lines = [
         f"STOP AUTOLOOP {datetime.now().isoformat()}",
         f"reason={reason}",
+        f"latest_robust={report.get('paths', {}).get('robust_json')}",
+        f"A_passed={report.get('A', {}).get('latest_robust_passed_count')}",
+        f"faseA_count={report.get('Promo', {}).get('faseA_count')}",
+        f"faseB_count={report.get('B', {}).get('faseB_count')}",
         f"contract_ok={report.get('contract_ok')}",
         f"liveness_ok={report.get('liveness_ok')}",
         "",
@@ -552,10 +560,10 @@ def _update_state(
     reason = ""
     if not contract_ok and stop_on_contract_fail:
         stop = True
-        reason = "contract_failed"
+        reason = "CONTRACT_FAIL"
     elif not liveness_ok and stop_on_liveness_fail:
         stop = True
-        reason = "liveness_failed"
+        reason = "LIVENESS_FAIL"
 
     _write_json(state_path, state)
 
@@ -575,33 +583,57 @@ def main() -> None:
     ap.add_argument("--root", required=True, help="repo root")
     ap.add_argument("--log", default=None, help="log file (optional)")
     ap.add_argument("--out", default=None, help="health json output")
-    ap.add_argument("--stop-file", required=True, help="stop file path")
+    ap.add_argument("--stop-file", default=None, help="stop file path")
     ap.add_argument("--state-file", default=None, help="health state json")
-    ap.add_argument("--stop-on-contract-fail", action="store_true", default=True)
-    ap.add_argument("--stop-on-liveness-fail", action="store_true", default=False)
+    ap.add_argument(
+        "--stop-on-contract-fail",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+    )
+    ap.add_argument(
+        "--stop-on-liveness-fail",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+    )
+    ap.add_argument("--stale-seconds", type=int, default=300)
     args = ap.parse_args()
 
     root = os.path.abspath(args.root)
     out_path = args.out or os.path.join(root, "results", "health", "health_latest.json")
     state_path = args.state_file or os.path.join(root, "results", "health", "health_state.json")
 
-    report = build_health_report(root)
-    state, stop, reason = _update_state(
+    report = build_health_report(root, stale_seconds=int(args.stale_seconds))
+    state, stop_requested, reason = _update_state(
         state_path,
         report,
         stop_on_contract_fail=bool(args.stop_on_contract_fail),
         stop_on_liveness_fail=bool(args.stop_on_liveness_fail),
     )
-    if stop:
-        _write_stop_file(args.stop_file, report, reason)
+
+    contract_ok = bool(report.get("contract_ok"))
+    liveness_ok = bool(report.get("liveness_ok"))
+    if not contract_ok:
+        exit_code = 2
+        stop_reason = "CONTRACT_FAIL"
+    elif not liveness_ok:
+        exit_code = 3
+        stop_reason = "LIVENESS_FAIL"
+    else:
+        exit_code = 0
+        stop_reason = ""
+
+    if stop_requested:
+        if args.stop_file:
+            _write_stop_file(args.stop_file, report, stop_reason or reason)
+        else:
+            warn_line = "[HEALTH][WARN] stop requested but --stop-file not provided"
+            print(warn_line, flush=True)
+            _log_line(args.log, warn_line)
 
     report["state"] = state
-    report["stop"] = stop
-    report["stop_reason"] = reason
-    if stop:
-        report["exit_code"] = 2 if reason == "contract_failed" else 3
-    else:
-        report["exit_code"] = 0
+    report["stop"] = stop_requested
+    report["stop_reason"] = stop_reason
+    report["exit_code"] = exit_code
 
     _write_json(out_path, report)
 
@@ -612,7 +644,7 @@ def main() -> None:
         f"A_passed={report.get('A', {}).get('latest_robust_passed_count')} "
         f"faseA_count={report.get('Promo', {}).get('faseA_count')} "
         f"faseB_count={report.get('B', {}).get('faseB_count')} "
-        f"stop={stop} reason=\"{reason}\" exit_code={report.get('exit_code')}"
+        f"stop={stop_requested} reason=\"{stop_reason}\" exit_code={report.get('exit_code')}"
     )
     print(line, flush=True)
     _log_line(args.log, line)
