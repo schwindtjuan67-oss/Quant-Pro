@@ -4,6 +4,7 @@ import argparse
 import csv
 import json
 import os
+import sys
 from collections import Counter
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
@@ -402,7 +403,16 @@ def build_health_report(root: str) -> Dict[str, Any]:
 
     stagec_summary = _stagec_summary(paths)
 
-    contract_ok = latest_robust_ok and fasea_ok and (faseb_ok is None or faseb_ok)
+    contract_ok_a = (
+        latest_robust_ok
+        and latest_robust_passed_count > 0
+        and fasea_ok
+        and fasea_count > 0
+    )
+    contract_ok_b = True
+    if faseb_validation is not None:
+        contract_ok_b = bool(faseb_validation.get("ok")) and (faseb_count or 0) > 0
+    contract_ok = contract_ok_a and contract_ok_b
 
     a_ran = robust_path is not None
     b_ran = faseb_path is not None
@@ -416,6 +426,14 @@ def build_health_report(root: str) -> Dict[str, Any]:
         liveness_ok = False
     if b_ran and (faseb_count or 0) <= 0:
         liveness_ok = False
+
+    warnings: List[str] = []
+    robust_mtime = paths.get("robust_json_mtime")
+    fasea_mtime = paths.get("faseA_promoted_mtime")
+    if robust_mtime and fasea_mtime:
+        delta_sec = robust_mtime - fasea_mtime
+        if delta_sec > 600:
+            warnings.append(f"faseA_promoted_stale:delta_sec={int(delta_sec)}")
 
     report = {
         "ts_utc": _utc_now().isoformat(),
@@ -441,6 +459,7 @@ def build_health_report(root: str) -> Dict[str, Any]:
         "C": stagec_summary,
         "contract_ok": contract_ok,
         "liveness_ok": liveness_ok,
+        "warnings": warnings,
     }
 
     return report
@@ -510,6 +529,8 @@ def _write_stop_file(path: str, report: Dict[str, Any], reason: str) -> None:
 def _update_state(
     state_path: str,
     report: Dict[str, Any],
+    stop_on_contract_fail: bool,
+    stop_on_liveness_fail: bool,
 ) -> Tuple[Dict[str, Any], bool, str]:
     state = _load_state(state_path)
     contract_ok = bool(report.get("contract_ok"))
@@ -529,12 +550,12 @@ def _update_state(
 
     stop = False
     reason = ""
-    if not contract_ok:
+    if not contract_ok and stop_on_contract_fail:
         stop = True
         reason = "contract_failed"
-    elif not liveness_ok and state["fail_streak_liveness"] >= 2:
+    elif not liveness_ok and stop_on_liveness_fail:
         stop = True
-        reason = "liveness_failed_2x"
+        reason = "liveness_failed"
 
     _write_json(state_path, state)
 
@@ -556,6 +577,8 @@ def main() -> None:
     ap.add_argument("--out", default=None, help="health json output")
     ap.add_argument("--stop-file", required=True, help="stop file path")
     ap.add_argument("--state-file", default=None, help="health state json")
+    ap.add_argument("--stop-on-contract-fail", action="store_true", default=True)
+    ap.add_argument("--stop-on-liveness-fail", action="store_true", default=False)
     args = ap.parse_args()
 
     root = os.path.abspath(args.root)
@@ -563,13 +586,22 @@ def main() -> None:
     state_path = args.state_file or os.path.join(root, "results", "health", "health_state.json")
 
     report = build_health_report(root)
-    state, stop, reason = _update_state(state_path, report)
+    state, stop, reason = _update_state(
+        state_path,
+        report,
+        stop_on_contract_fail=bool(args.stop_on_contract_fail),
+        stop_on_liveness_fail=bool(args.stop_on_liveness_fail),
+    )
     if stop:
         _write_stop_file(args.stop_file, report, reason)
 
     report["state"] = state
     report["stop"] = stop
     report["stop_reason"] = reason
+    if stop:
+        report["exit_code"] = 2 if reason == "contract_failed" else 3
+    else:
+        report["exit_code"] = 0
 
     _write_json(out_path, report)
 
@@ -580,10 +612,18 @@ def main() -> None:
         f"A_passed={report.get('A', {}).get('latest_robust_passed_count')} "
         f"faseA_count={report.get('Promo', {}).get('faseA_count')} "
         f"faseB_count={report.get('B', {}).get('faseB_count')} "
-        f"stop={stop} reason=\"{reason}\""
+        f"stop={stop} reason=\"{reason}\" exit_code={report.get('exit_code')}"
     )
     print(line, flush=True)
     _log_line(args.log, line)
+
+    warnings = report.get("warnings") or []
+    for warning in warnings:
+        warn_line = f"[HEALTH][WARN] {warning}"
+        print(warn_line, flush=True)
+        _log_line(args.log, warn_line)
+
+    sys.exit(int(report.get("exit_code", 0)))
 
 
 if __name__ == "__main__":

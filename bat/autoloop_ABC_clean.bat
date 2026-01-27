@@ -48,6 +48,7 @@ set "PROMO_DIR=results\promotions"
 set "STAGEC_TRADES_DIR=results\pipeline_stageC_trades"
 set "HEALTH_DIR=results\health"
 set "HEALTH_OUT=%HEALTH_DIR%\health_latest.json"
+set "HEALTH_POSTA_OUT=%HEALTH_DIR%\health_postA.json"
 set "LOG_DIR=logs"
 set "LOG_FILE=%LOG_DIR%\autoloop_ABC.log"
 
@@ -198,8 +199,12 @@ REM === HEALTH (POST-A) ===
 REM =========================
 echo [HEALTH][POST-A] running health check
 >>"%LOG_FILE%" echo [HEALTH][POST-A] running health check
-%PYTHON% -m analysis.pipeline_health --root "%ROOT%" --log "%LOG_FILE%" --out "%HEALTH_OUT%" --stop-file "%STOP_FILE%" >>"%LOG_FILE%" 2>&1
-if exist "%STOP_FILE%" goto END
+%PYTHON% -m analysis.pipeline_health --root "%ROOT%" --log "%LOG_FILE%" --out "%HEALTH_POSTA_OUT%" --stop-file "%STOP_FILE%" --stop-on-contract-fail >>"%LOG_FILE%" 2>&1
+if errorlevel 2 (
+  echo [HEALTH][POST-A] STOP triggered, aborting cycle
+  >>"%LOG_FILE%" echo [HEALTH][POST-A] STOP triggered, aborting cycle
+  goto END
+)
 
 REM =========================
 REM STAGE B — RISK CALIBRATION
@@ -218,8 +223,12 @@ REM === HEALTH (POST-B) ===
 REM =========================
 echo [HEALTH][POST-B] running health check
 >>"%LOG_FILE%" echo [HEALTH][POST-B] running health check
-%PYTHON% -m analysis.pipeline_health --root "%ROOT%" --log "%LOG_FILE%" --out "%HEALTH_OUT%" --stop-file "%STOP_FILE%" >>"%LOG_FILE%" 2>&1
-if exist "%STOP_FILE%" goto END
+%PYTHON% -m analysis.pipeline_health --root "%ROOT%" --log "%LOG_FILE%" --out "%HEALTH_OUT%" --stop-file "%STOP_FILE%" --stop-on-contract-fail >>"%LOG_FILE%" 2>&1
+if errorlevel 2 (
+  echo [HEALTH][POST-B] STOP triggered, aborting cycle
+  >>"%LOG_FILE%" echo [HEALTH][POST-B] STOP triggered, aborting cycle
+  goto END
+)
 
 REM =========================
 REM STAGE C — SUPERVIVENCIA REAL
