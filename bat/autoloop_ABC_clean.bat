@@ -46,6 +46,8 @@ set "BASE_CFG=configs\pipeline_research_backtest.json"
 set "ROBUST_OUT_DIR=results\robust"
 set "PROMO_DIR=results\promotions"
 set "STAGEC_TRADES_DIR=results\pipeline_stageC_trades"
+set "HEALTH_DIR=results\health"
+set "HEALTH_OUT=%HEALTH_DIR%\health_latest.json"
 set "LOG_DIR=logs"
 set "LOG_FILE=%LOG_DIR%\autoloop_ABC.log"
 
@@ -94,7 +96,7 @@ set "SUPERVISOR_DELAY_SEC=10"
 REM =====================================================
 REM INIT DIRS
 REM =====================================================
-for %%D in ("%LOG_DIR%" "%ROBUST_OUT_DIR%" "%PROMO_DIR%" "%STAGEC_TRADES_DIR%") do (
+for %%D in ("%LOG_DIR%" "%ROBUST_OUT_DIR%" "%PROMO_DIR%" "%STAGEC_TRADES_DIR%" "%HEALTH_DIR%") do (
   if not exist %%D mkdir %%D
 )
 
@@ -192,6 +194,14 @@ REM =========================
 %PYTHON% -m analysis.analysis_post_robust >>"%LOG_FILE%" 2>&1
 
 REM =========================
+REM === HEALTH (POST-A) ===
+REM =========================
+echo [HEALTH][POST-A] running health check
+>>"%LOG_FILE%" echo [HEALTH][POST-A] running health check
+%PYTHON% -m analysis.pipeline_health --root "%ROOT%" --log "%LOG_FILE%" --out "%HEALTH_OUT%" --stop-file "%STOP_FILE%" >>"%LOG_FILE%" 2>&1
+if exist "%STOP_FILE%" goto END
+
+REM =========================
 REM STAGE B — RISK CALIBRATION
 REM =========================
 %PYTHON% -m analysis.stage_b_risk_calibration ^
@@ -202,6 +212,14 @@ REM =========================
   --report-csv "%PROMO_DIR%\faseB_report.csv" ^
   --samples %B_SAMPLES% ^
   --seed %B_SEED% >>"%LOG_FILE%" 2>&1
+
+REM =========================
+REM === HEALTH (POST-B) ===
+REM =========================
+echo [HEALTH][POST-B] running health check
+>>"%LOG_FILE%" echo [HEALTH][POST-B] running health check
+%PYTHON% -m analysis.pipeline_health --root "%ROOT%" --log "%LOG_FILE%" --out "%HEALTH_OUT%" --stop-file "%STOP_FILE%" >>"%LOG_FILE%" 2>&1
+if exist "%STOP_FILE%" goto END
 
 REM =========================
 REM STAGE C — SUPERVIVENCIA REAL
@@ -224,6 +242,14 @@ set STAGEC_REQUIRE_GLOBAL_PASS=1
   --trades-dir "%STAGEC_TRADES_DIR%" ^
   --interval %C_INTERVAL% ^
   --warmup %C_WARMUP% >>"%LOG_FILE%" 2>&1
+
+REM =========================
+REM === HEALTH (POST-C) ===
+REM =========================
+echo [HEALTH][POST-C] running health check
+>>"%LOG_FILE%" echo [HEALTH][POST-C] running health check
+%PYTHON% -m analysis.pipeline_health --root "%ROOT%" --log "%LOG_FILE%" --out "%HEALTH_OUT%" --stop-file "%STOP_FILE%" >>"%LOG_FILE%" 2>&1
+if exist "%STOP_FILE%" goto END
 
 timeout /t %CYCLE_DELAY_SEC% /nobreak >nul
 exit /b 0
