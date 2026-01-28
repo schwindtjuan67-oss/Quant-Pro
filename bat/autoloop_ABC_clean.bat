@@ -136,10 +136,10 @@ if not exist "%SEED_STATE_FILE%" echo %START_SEED%>"%SEED_STATE_FILE%"
 REM =====================================================
 REM SELF-CHECK FAIL-FAST
 REM =====================================================
-%PYTHON% -m analysis.selfcheck_risk_soft_max_trades
-if errorlevel 1 (
+REM En pipeline validamos que SOFT_MAX_TRADES solo se desactiva con el flag de pipeline.
+"%PYTHON%" -m analysis.selfcheck_risk_soft_max_trades || (
   echo [FATAL] selfcheck_risk_soft_max_trades failed
-  exit /b %ERRORLEVEL%
+  exit /b 1
 )
 
 REM =====================================================
