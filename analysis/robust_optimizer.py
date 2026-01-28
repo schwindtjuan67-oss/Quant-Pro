@@ -20,6 +20,7 @@ import json
 import pickle
 import multiprocessing as mp
 import tempfile
+import re
 from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -67,15 +68,18 @@ FAIL_COUNTS = Counter()
 
 def window_to_dates(window: str) -> Tuple[str, str]:
     """
-    '2020-01_2021-12' -> ('2020-01-01', '2021-12-31')
+    '2020-01_2021-12' -> ('2020-01-01', '2022-01-01') (end exclusive)
     """
     try:
         start, end = str(window).strip().split("_")
         y1, m1 = map(int, start.split("-"))
         y2, m2 = map(int, end.split("-"))
         from_date = f"{y1:04d}-{m1:02d}-01"
-        last_day = calendar.monthrange(y2, m2)[1]
-        to_date = f"{y2:04d}-{m2:02d}-{last_day:02d}"
+        if m2 == 12:
+            y2_next, m2_next = y2 + 1, 1
+        else:
+            y2_next, m2_next = y2, m2 + 1
+        to_date = f"{y2_next:04d}-{m2_next:02d}-01"
         return from_date, to_date
     except Exception as e:
         raise ValueError(f"[ROBUST] Invalid --window format: {window!r}. Expected YYYY-MM_YYYY-MM") from e
@@ -85,7 +89,9 @@ def window_to_dates(window: str) -> Tuple[str, str]:
 # Helpers de diagnóstico + normalización timestamps
 # ============================================================
 
-def _ms_to_iso(ms: int) -> str:
+def _ms_to_iso(ms: Optional[int]) -> str:
+    if ms is None:
+        return "-"
     try:
         return datetime.fromtimestamp(ms / 1000.0, tz=timezone.utc).isoformat()
     except Exception:
@@ -177,8 +183,8 @@ def _format_fail_metrics_from_payload_folds(folds: List[Dict[str, Any]]) -> List
 
 def _iter_candles_from_simple_csv(
     files: List[str],
-    start_ms: int,
-    end_ms: int,
+    start_ms: Optional[int],
+    end_ms: Optional[int],
     debug: bool = False,
 ):
     for fp in sorted(files):
@@ -214,8 +220,10 @@ def _iter_candles_from_simple_csv(
                 ts = _coerce_ts_to_ms(row.get(ts_col))
                 if ts is None:
                     continue
-                # end_ms inclusive (compat)
-                if ts < start_ms or ts > end_ms:
+                # end_ms exclusive
+                if start_ms is not None and ts < start_ms:
+                    continue
+                if end_ms is not None and ts >= end_ms:
                     continue
 
                 def ffloat(x):
@@ -241,6 +249,65 @@ def _iter_candles_from_simple_csv(
 def _path_has_segment(path: str, segment: str) -> bool:
     parts = os.path.normpath(path).split(os.sep)
     return any(p == segment for p in parts)
+
+
+def _parse_date_ymd_utc(value: str) -> datetime:
+    return datetime.strptime(value, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+
+
+def _month_start(year: int, month: int) -> datetime:
+    return datetime(year, month, 1, tzinfo=timezone.utc)
+
+
+def _next_month_start(dt: datetime) -> datetime:
+    if dt.month == 12:
+        return datetime(dt.year + 1, 1, 1, tzinfo=timezone.utc)
+    return datetime(dt.year, dt.month + 1, 1, tzinfo=timezone.utc)
+
+
+def _extract_year_month(path: str) -> Optional[Tuple[int, int]]:
+    base = os.path.basename(path)
+    matches = re.findall(r"(\\d{4})-(\\d{2})", base)
+    if not matches:
+        return None
+    year_str, month_str = matches[-1]
+    try:
+        year = int(year_str)
+        month = int(month_str)
+    except Exception:
+        return None
+    if month < 1 or month > 12:
+        return None
+    return year, month
+
+
+def _filter_files_for_window(
+    files: List[str],
+    date_from: Optional[str],
+    date_to: Optional[str],
+) -> List[str]:
+    if not date_from or not date_to:
+        return list(files)
+    try:
+        start_dt = _parse_date_ymd_utc(date_from)
+        end_dt = _parse_date_ymd_utc(date_to)
+    except Exception:
+        return list(files)
+
+    keep: List[str] = []
+    for fp in files:
+        ym = _extract_year_month(fp)
+        if not ym:
+            keep.append(fp)
+            continue
+        file_start = _month_start(*ym)
+        file_end = _next_month_start(file_start)
+        if file_end <= start_dt:
+            continue
+        if file_start >= end_dt:
+            continue
+        keep.append(fp)
+    return keep
 
 
 def _discover_data_files(data_path: str, interval: Optional[str] = None) -> Dict[str, Any]:
@@ -359,6 +426,13 @@ def load_candles_from_path(
     else:
         files = []
     if files:
+        is_file_input = os.path.isfile(data_path)
+        if not is_file_input:
+            files = _filter_files_for_window(files, date_from, date_to)
+        if not files:
+            window_label = f"{date_from or '-'}_{date_to or '-'}"
+            raise RuntimeError(f"[ROBUST] No CSVs found for window {window_label} in: {data_path}")
+
         start_ms, end_ms = _date_range_to_ms(date_from, date_to)
 
         if debug:
@@ -372,7 +446,7 @@ def load_candles_from_path(
 
         # 1) loader oficial
         try:
-            for c in _iter_candles_from_csvs(files, start_ms=start_ms, end_ms=end_ms, quiet=True):
+            for c in _iter_candles_from_csvs(files, start_ms=None, end_ms=None, quiet=True):
                 ts = _pick_ts_ms(c)
                 if ts is not None:
                     c["timestamp_ms"] = ts
@@ -385,14 +459,45 @@ def load_candles_from_path(
         if not candles:
             if debug:
                 print("[ROBUST][DEBUG] official loader loaded 0 (NO MATCH IN RANGE). Trying simple CSV parser...")
-            for c in _iter_candles_from_simple_csv(files, start_ms=start_ms, end_ms=end_ms, debug=debug):
+            for c in _iter_candles_from_simple_csv(files, start_ms=None, end_ms=None, debug=debug):
                 candles.append(c)
 
+        candles.sort(key=lambda c: _pick_ts_ms(c) or 0)
+        if start_ms is not None or end_ms is not None:
+            filtered: List[Dict[str, Any]] = []
+            for c in candles:
+                ts = _pick_ts_ms(c)
+                if ts is None:
+                    continue
+                if start_ms is not None and ts < start_ms:
+                    continue
+                if end_ms is not None and ts >= end_ms:
+                    continue
+                filtered.append(c)
+            window_candles = filtered
+        else:
+            window_candles = candles
+
+        if _diagnostics_enabled() or debug:
+            window_label = f"{date_from or '-'}_{date_to or '-'}"
+            first_ts = _pick_ts_ms(window_candles[0]) if window_candles else None
+            last_ts = _pick_ts_ms(window_candles[-1]) if window_candles else None
+            print(
+                f"[DATA] data_dir={data_path} window={window_label} keep_files={len(files)}",
+                flush=True,
+            )
+            print(
+                f"[DATA] loaded_rows={len(candles)} window_rows={len(window_candles)} "
+                f"first_ts={_ms_to_iso(first_ts) if first_ts is not None else '-'} "
+                f"last_ts={_ms_to_iso(last_ts) if last_ts is not None else '-'}",
+                flush=True,
+            )
+
         if debug:
-            if candles:
-                ts0 = _pick_ts_ms(candles[0])
-                ts1 = _pick_ts_ms(candles[-1])
-                print(f"[ROBUST][DEBUG] candles_loaded={len(candles)}")
+            if window_candles:
+                ts0 = _pick_ts_ms(window_candles[0])
+                ts1 = _pick_ts_ms(window_candles[-1])
+                print(f"[ROBUST][DEBUG] candles_loaded={len(window_candles)}")
                 if ts0 is not None and ts1 is not None:
                     print(f"[ROBUST][DEBUG] first_ts={ts0} ({_ms_to_iso(ts0)})")
                     print(f"[ROBUST][DEBUG] last_ts ={ts1} ({_ms_to_iso(ts1)})")
@@ -400,10 +505,10 @@ def load_candles_from_path(
                 print("[ROBUST][DEBUG] candles_loaded=0 (NO MATCH IN RANGE)")
 
             # ✅ EXTRA (pedido): conteo por mes SOLO si hay velas
-            if candles:
+            if window_candles:
                 from collections import Counter
                 ym = Counter()
-                for c in candles:
+                for c in window_candles:
                     ts = _pick_ts_ms(c)
                     if ts:
                         d = datetime.fromtimestamp(ts / 1000, tz=timezone.utc)
@@ -413,13 +518,13 @@ def load_candles_from_path(
                 for k in sorted(ym):
                     print(f"  {k}: {ym[k]}")
 
-        range_min, range_max = _describe_candle_range(candles)
+        range_min, range_max = _describe_candle_range(window_candles)
         if range_min is not None and range_max is not None:
             print(
                 f"[ROBUST][DATA] candles_range={_ms_to_iso(range_min)} -> {_ms_to_iso(range_max)}",
                 flush=True,
             )
-        return candles
+        return window_candles
 
     if data_spec.get("selected_kind") == "pkl":
         pkl_files = list(selected)
