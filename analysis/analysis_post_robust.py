@@ -7,6 +7,7 @@ import csv
 import glob
 import json
 import os
+import re
 import statistics
 import sys
 from typing import Any, Dict, List, Optional, Tuple
@@ -58,26 +59,38 @@ def _load_rules(path: str) -> Dict[str, Any]:
     return rules
 
 
-def _iter_records(data: Any, source_path: str) -> List[Dict[str, Any]]:
+def iter_robust_records(data: Any, source_path: str) -> List[Dict[str, Any]]:
+    basename = os.path.basename(source_path)
     if isinstance(data, list):
         return [r for r in data if isinstance(r, dict)]
 
-    if isinstance(data, dict) and {"params", "passed", "robust_score"}.issubset(data.keys()):
-        params = data.get("params", [])
-        passed = data.get("passed", [])
-        scores = data.get("robust_score", [])
-        fail_reason = data.get("fail_reason", [])
-        folds = data.get("folds", [])
+    if isinstance(data, dict):
+        required = {"params", "passed", "robust_score", "fail_reason"}
+        if not required.issubset(data.keys()):
+            raise ValueError(f"Unknown robust schema in {basename}")
+
+        params = data.get("params")
+        passed = data.get("passed")
+        scores = data.get("robust_score")
+        fail_reason = data.get("fail_reason")
+        agg = data.get("agg")
+        folds = data.get("folds")
         meta = data.get("meta", {})
 
-        if not (isinstance(params, list) and isinstance(passed, list) and isinstance(scores, list)):
-            raise ValueError(f"Robust schema must include list params/passed/robust_score: {source_path}")
-
-        if not (len(params) == len(passed) == len(scores)):
+        if not all(isinstance(x, list) for x in (params, passed, scores, fail_reason)):
             raise ValueError(
-                f"Robust schema length mismatch in {source_path}: "
-                f"params={len(params)} passed={len(passed)} robust_score={len(scores)}"
+                f"Robust schema must include list params/passed/robust_score/fail_reason: {basename}"
             )
+
+        if not (len(params) == len(passed) == len(scores) == len(fail_reason)):
+            raise ValueError(
+                f"Robust schema length mismatch in {basename}: "
+                f"params={len(params)} passed={len(passed)} robust_score={len(scores)} "
+                f"fail_reason={len(fail_reason)}"
+            )
+
+        if len(params) == 0:
+            raise ValueError(f"Robust schema empty arrays in {basename}")
 
         records: List[Dict[str, Any]] = []
         for i, param in enumerate(params):
@@ -86,36 +99,36 @@ def _iter_records(data: Any, source_path: str) -> List[Dict[str, Any]]:
                 score_val = float(score_val)
             except (TypeError, ValueError):
                 score_val = score_val
-            record_folds: List[Dict[str, Any]] = []
-            if isinstance(folds, list) and len(folds) == len(params):
-                if isinstance(folds[i], list):
-                    record_folds = [f for f in folds[i] if isinstance(f, dict)]
+
+            record_agg: Dict[str, Any] = {}
+            if isinstance(agg, list) and len(agg) == len(params) and isinstance(agg[i], dict):
+                record_agg = agg[i]
+
+            record_folds: List[Any] = []
+            if isinstance(folds, list) and len(folds) == len(params) and isinstance(folds[i], list):
+                record_folds = folds[i]
+
             record: Dict[str, Any] = {
                 "params": param,
                 "passed": bool(passed[i]),
                 "robust_score": score_val,
-                "fail_reason": fail_reason[i] if isinstance(fail_reason, list) and i < len(fail_reason) else None,
+                "fail_reason": fail_reason[i],
+                "agg": record_agg,
                 "folds": record_folds,
                 "meta": meta,
             }
             records.append(record)
         return records
 
-    if isinstance(data, dict):
-        raise ValueError(f"Unknown robust schema in {source_path}")
-
     return []
 
 
-def parse_filename(path: str) -> Tuple[str, int]:
+def parse_filename(path: str) -> Optional[Tuple[str, int]]:
     name = os.path.basename(path)
-    if "_seed" not in name:
-        raise ValueError(f"Invalid robust filename (missing _seed): {name}")
-    parts = name.replace(".json", "").split("_seed")
-    if len(parts) != 2 or not parts[1].isdigit():
-        raise ValueError(f"Invalid robust filename: {name}")
-    window = parts[0].replace("robust_", "")
-    return window, int(parts[1])
+    match = re.match(r"^robust_(?P<window>.+)_seed(?P<seed>\d+)(?P<suffix>.*)\.json$", name)
+    if not match:
+        return None
+    return match.group("window"), int(match.group("seed"))
 
 
 def normalize_metrics(rec: Dict[str, Any]) -> Dict[str, float]:
@@ -202,12 +215,14 @@ def main() -> None:
     out_dir = os.path.join(root, "results", "promotions")
     os.makedirs(out_dir, exist_ok=True)
 
-    rules_path = args.rules or os.getenv("PIPELINE_RULES")
+    rules_path = args.rules
     if not rules_path:
         primary_rules = os.path.join(root, "configs", "promotion_rules_A.json")
         fallback_rules = os.path.join(os.path.dirname(__file__), "promotion_rules.json")
         if os.path.exists(primary_rules):
             rules_path = primary_rules
+        elif os.getenv("PIPELINE_RULES"):
+            rules_path = os.getenv("PIPELINE_RULES")
         elif os.path.exists(fallback_rules):
             rules_path = fallback_rules
         else:
@@ -237,12 +252,19 @@ def main() -> None:
     skipped_phase = 0
 
     for fp in files:
-        window, seed = parse_filename(fp)
+        parsed = parse_filename(fp)
+        if not parsed:
+            print(f"[POST][WARN] skipping unrecognized robust filename: {os.path.basename(fp)}")
+            continue
+        window, seed = parsed
 
-        with open(fp, "r", encoding="utf-8") as f:
-            data = json.load(f)
+        try:
+            with open(fp, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except Exception as exc:
+            raise ValueError(f"Failed reading robust file {os.path.basename(fp)}: {exc}") from exc
 
-        records = _iter_records(data, fp)
+        records = iter_robust_records(data, fp)
         for r in records:
             if not isinstance(r, dict):
                 continue
