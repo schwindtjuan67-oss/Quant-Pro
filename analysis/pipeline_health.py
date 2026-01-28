@@ -404,7 +404,14 @@ def build_health_report(root: str, stale_seconds: int = 300) -> Dict[str, Any]:
 
     stagec_summary = _stagec_summary(paths)
 
-    contract_ok = latest_robust_ok and latest_robust_passed_count > 0 and fasea_ok
+    contract_ok = False
+    contract_reason = "CONTRACT_FAIL"
+    if no_promotion_a:
+        contract_ok = True
+        contract_reason = "NO_PROMOTION_CONTINUE_A"
+    elif latest_robust_ok and latest_robust_passed_count > 0 and fasea_ok:
+        contract_ok = True
+        contract_reason = "CONTRACT_OK"
 
     a_ran = robust_path is not None
     b_ran = faseb_path is not None
@@ -455,6 +462,7 @@ def build_health_report(root: str, stale_seconds: int = 300) -> Dict[str, Any]:
         },
         "C": stagec_summary,
         "contract_ok": contract_ok,
+        "contract_reason": contract_reason,
         "liveness_ok": liveness_ok,
         "no_promotion_a": no_promotion_a,
         "warnings": warnings,
