@@ -183,6 +183,12 @@ def validate_faseA_promoted(path: str) -> Dict[str, Any]:
         payload = _read_json(path)
     except Exception as exc:
         return {"ok": False, "errors": [f"read_error:{exc!r}"], "count": 0, "items": []}
+    if isinstance(payload, dict):
+        candidates = payload.get("candidates")
+        if isinstance(candidates, list):
+            payload = candidates
+        else:
+            return {"ok": False, "errors": ["payload_not_list"], "count": 0, "items": []}
     if not isinstance(payload, list):
         return {"ok": False, "errors": ["payload_not_list"], "count": 0, "items": []}
 
@@ -627,7 +633,7 @@ def main() -> None:
     else:
         exit_code = 0
         stop_reason = ""
-        reason = "NO_PROMOTION_A" if no_promotion_a else ""
+        reason = "NO_PROMOTION_CONTINUE_A" if no_promotion_a else ""
 
     if stop_requested:
         if args.stop_file:
@@ -656,6 +662,11 @@ def main() -> None:
     )
     print(line, flush=True)
     _log_line(args.log, line)
+
+    if no_promotion_a:
+        info_line = "[HEALTH] No promotion in Phase A -> continue Phase A (no stop)"
+        print(info_line, flush=True)
+        _log_line(args.log, info_line)
 
     warnings = report.get("warnings") or []
     for warning in warnings:

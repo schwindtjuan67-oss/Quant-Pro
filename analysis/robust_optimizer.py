@@ -294,6 +294,15 @@ def _filter_files_for_window(
     except Exception:
         return list(files)
 
+    for fp in files:
+        if _extract_year_month(fp) is None:
+            print(
+                "[ROBUST][WARN] CSV naming does not include YYYY-MM; "
+                "falling back to all files for window filtering.",
+                flush=True,
+            )
+            return list(files)
+
     keep: List[str] = []
     for fp in files:
         ym = _extract_year_month(fp)
@@ -428,7 +437,17 @@ def load_candles_from_path(
     if files:
         is_file_input = os.path.isfile(data_path)
         if not is_file_input:
+            found_csv = len(files)
             files = _filter_files_for_window(files, date_from, date_to)
+            window_label = f"{date_from or '-'}_{date_to or '-'}"
+            print(
+                f"[ROBUST][DATA] keep_files={len(files)} of found_csv={found_csv} for window={window_label}",
+                flush=True,
+            )
+            for idx, fp in enumerate(files[:10], start=1):
+                print(f"[ROBUST][DATA] keep[{idx}]: {fp}", flush=True)
+            if len(files) > 10:
+                print(f"[ROBUST][DATA] keep[...]: +{len(files) - 10} more", flush=True)
         if not files:
             window_label = f"{date_from or '-'}_{date_to or '-'}"
             raise RuntimeError(f"[ROBUST] No CSVs found for window {window_label} in: {data_path}")
