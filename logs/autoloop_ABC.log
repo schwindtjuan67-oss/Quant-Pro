@@ -41020,3 +41020,5 @@ WINDOWS=2020-09_2020-12 2021-01_2021-12 2022-01_2023-06
 [ROBUST][HB] done=32/287 passed=0 failed=32 elapsed=00:00:41 rate=0.78 params/s window=2020-09_2020-12 seed=6019 top_fails: fold 0: min_trades (1)=32, fold 1: min_trades (1)=32, fold 2: min_trades (1)=32
 [ROBUST][HB] done=96/287 passed=0 failed=96 elapsed=00:01:20 rate=1.20 params/s window=2020-09_2020-12 seed=6019 top_fails: fold 0: min_trades (1)=96, fold 1: min_trades (1)=96, fold 2: min_trades (1)=96
 [ROBUST][HB] done=160/287 passed=0 failed=160 elapsed=00:01:59 rate=1.33 params/s window=2020-09_2020-12 seed=6019 top_fails: fold 0: min_trades (1)=160, fold 1: min_trades (1)=160, fold 2: min_trades (1)=160
+[ROBUST][HB] done=224/287 passed=0 failed=224 elapsed=00:02:39 rate=1.40 params/s window=2020-09_2020-12 seed=6019 top_fails: fold 0: min_trades (1)=224, fold 1: min_trades (1)=224, fold 2: min_trades (1)=224
+^C
