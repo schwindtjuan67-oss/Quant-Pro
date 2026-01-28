@@ -51,7 +51,7 @@ def main() -> int:
             f"expected conservative_reason=SOFT_MAX_TRADES, got {rm_normal.conservative_reason!r}",
         )
         _assert(
-            "SOFT_MAX_TRADES disabled" not in out_normal,
+            "SOFT_MAX_TRADES disabled (PIPELINE)" not in out_normal,
             "did not expect disabled log without flag",
         )
         passes.append("CASE A ok: conservative_mode + risk_mult applied without disable flag")
@@ -66,7 +66,7 @@ def main() -> int:
             abs(rm_disabled.risk_mult - rm_disabled.conservative_risk_mult) > 1e-9,
             "expected risk_mult not to drop to conservative_risk_mult with disable flag",
         )
-        disabled_count = out_disabled.count("SOFT_MAX_TRADES disabled")
+        disabled_count = out_disabled.count("SOFT_MAX_TRADES disabled (PIPELINE)")
         _assert(
             disabled_count == 1,
             f"expected disabled log exactly once with flag, got {disabled_count}",
