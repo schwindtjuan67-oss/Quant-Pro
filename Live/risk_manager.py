@@ -6,10 +6,11 @@
 
 from __future__ import annotations
 
-import os
 import time
 from dataclasses import dataclass
 from typing import Optional, Dict, Any
+
+from utils.env import disable_soft_max_trades_enabled
 
 
 @dataclass
@@ -92,23 +93,6 @@ class RiskManager:
         self._soft_max_trades_disable_logged = False
 
     # -----------------------------------------------------------
-    def _is_truthy_env(self, name: str, default: bool = False) -> bool:
-        raw = os.getenv(name, "")
-        if raw is None:
-            return bool(default)
-        raw = str(raw).strip().lower()
-        if raw == "":
-            return bool(default)
-        return raw in {"1", "true", "yes", "on"}
-
-    def _disable_soft_max_trades_enabled(self) -> bool:
-        run_mode = os.getenv("RUN_MODE", "LIVE").upper().strip()
-        if run_mode != "PIPELINE":
-            return False
-        return self._is_truthy_env("PIPELINE_DISABLE_SOFT_MAX_TRADES") or self._is_truthy_env(
-            "RISK_DISABLE_SOFT_MAX_TRADES"
-        )
-
     # -----------------------------------------------------------
     # Internals: day key
     # -----------------------------------------------------------
@@ -229,7 +213,7 @@ class RiskManager:
 
             # soft: si excede trades, conservador (pero no hard stop)
             if self.trades_today >= int(self.soft_trades_after):
-                if self._disable_soft_max_trades_enabled():
+                if disable_soft_max_trades_enabled():
                     if not self._soft_max_trades_disable_logged:
                         print("[RISK] SOFT_MAX_TRADES disabled (PIPELINE)")
                         self._soft_max_trades_disable_logged = True
