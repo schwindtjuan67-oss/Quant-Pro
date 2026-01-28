@@ -134,6 +134,15 @@ echo %DATE% %TIME%>"%LOCK_FILE%"
 if not exist "%SEED_STATE_FILE%" echo %START_SEED%>"%SEED_STATE_FILE%"
 
 REM =====================================================
+REM SELF-CHECK FAIL-FAST
+REM =====================================================
+%PYTHON% -m analysis.selfcheck_risk_soft_max_trades
+if errorlevel 1 (
+  echo [FATAL] selfcheck_risk_soft_max_trades failed
+  exit /b %ERRORLEVEL%
+)
+
+REM =====================================================
 REM SUPERVISOR LOOP
 REM =====================================================
 :SUPERVISOR
