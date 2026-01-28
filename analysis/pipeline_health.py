@@ -394,6 +394,7 @@ def build_health_report(root: str, stale_seconds: int = 300) -> Dict[str, Any]:
 
     fasea_ok = bool(fasea_validation and fasea_validation.get("ok"))
     fasea_count = int(fasea_validation.get("count", 0)) if fasea_validation else 0
+    no_promotion_a = bool(fasea_ok and fasea_count == 0)
 
     faseb_ok: Optional[bool] = None
     faseb_count: Optional[int] = None
@@ -403,12 +404,7 @@ def build_health_report(root: str, stale_seconds: int = 300) -> Dict[str, Any]:
 
     stagec_summary = _stagec_summary(paths)
 
-    contract_ok = (
-        latest_robust_ok
-        and latest_robust_passed_count > 0
-        and fasea_ok
-        and fasea_count > 0
-    )
+    contract_ok = latest_robust_ok and latest_robust_passed_count > 0 and fasea_ok
 
     a_ran = robust_path is not None
     b_ran = faseb_path is not None
@@ -418,8 +414,6 @@ def build_health_report(root: str, stale_seconds: int = 300) -> Dict[str, Any]:
         samples = robust_validation.get("counts", {}).get("samples", 0) if robust_validation else 0
         if not latest_robust_ok or samples <= 0:
             liveness_ok = False
-    if fasea_count <= 0:
-        liveness_ok = False
     if b_ran and (faseb_count or 0) <= 0:
         liveness_ok = False
 
@@ -462,6 +456,7 @@ def build_health_report(root: str, stale_seconds: int = 300) -> Dict[str, Any]:
         "C": stagec_summary,
         "contract_ok": contract_ok,
         "liveness_ok": liveness_ok,
+        "no_promotion_a": no_promotion_a,
         "warnings": warnings,
         "warning_faseA_stale": warning_fasea_stale,
         "warning_faseA_stale_delta_seconds": warning_fasea_stale_delta,
@@ -612,15 +607,19 @@ def main() -> None:
 
     contract_ok = bool(report.get("contract_ok"))
     liveness_ok = bool(report.get("liveness_ok"))
+    no_promotion_a = bool(report.get("no_promotion_a"))
     if not contract_ok:
         exit_code = 2
         stop_reason = "CONTRACT_FAIL"
+        reason = "CONTRACT_FAIL"
     elif not liveness_ok:
         exit_code = 3
         stop_reason = "LIVENESS_FAIL"
+        reason = "LIVENESS_FAIL"
     else:
         exit_code = 0
         stop_reason = ""
+        reason = "NO_PROMOTION_A" if no_promotion_a else ""
 
     if stop_requested:
         if args.stop_file:
@@ -633,6 +632,7 @@ def main() -> None:
     report["state"] = state
     report["stop"] = stop_requested
     report["stop_reason"] = stop_reason
+    report["reason"] = reason
     report["exit_code"] = exit_code
 
     _write_json(out_path, report)
@@ -644,7 +644,7 @@ def main() -> None:
         f"A_passed={report.get('A', {}).get('latest_robust_passed_count')} "
         f"faseA_count={report.get('Promo', {}).get('faseA_count')} "
         f"faseB_count={report.get('B', {}).get('faseB_count')} "
-        f"stop={stop_requested} reason=\"{stop_reason}\" exit_code={report.get('exit_code')}"
+        f"stop={stop_requested} reason=\"{reason}\" exit_code={report.get('exit_code')}"
     )
     print(line, flush=True)
     _log_line(args.log, line)
