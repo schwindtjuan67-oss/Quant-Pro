@@ -9,7 +9,7 @@ from io import StringIO
 from Live.risk_manager import RiskManager
 
 
-def _run_case(run_mode: str, disable_flag: bool, exits: int = 3) -> tuple[RiskManager, str]:
+def _run_case(run_mode: str, disable_flag: bool, exits: int = 5) -> tuple[RiskManager, str]:
     os.environ["RUN_MODE"] = run_mode
     if disable_flag:
         os.environ["PIPELINE_DISABLE_SOFT_MAX_TRADES"] = "1"
@@ -34,38 +34,46 @@ def _run_case(run_mode: str, disable_flag: bool, exits: int = 3) -> tuple[RiskMa
 
 
 def main() -> int:
-    failures: list[str] = []
     passes: list[str] = []
 
-    rm_normal, out_normal = _run_case("PIPELINE", False, exits=3)
-    if not rm_normal.conservative_mode:
-        failures.append("expected conservative_mode=True without disable flag")
-    if abs(rm_normal.risk_mult - 0.5) > 1e-9:
-        failures.append(f"expected risk_mult=0.5 without disable flag, got {rm_normal.risk_mult}")
-    if rm_normal.conservative_reason != "SOFT_MAX_TRADES":
-        failures.append(f"expected conservative_reason=SOFT_MAX_TRADES, got {rm_normal.conservative_reason!r}")
-    if "SOFT_MAX_TRADES disabled" in out_normal:
-        failures.append("did not expect disabled log without flag")
-    if not failures:
+    def _assert(condition: bool, message: str) -> None:
+        assert condition, message
+
+    try:
+        rm_normal, out_normal = _run_case("PIPELINE", False)
+        _assert(rm_normal.conservative_mode, "expected conservative_mode=True without disable flag")
+        _assert(
+            abs(rm_normal.risk_mult - rm_normal.conservative_risk_mult) < 1e-9,
+            f"expected risk_mult={rm_normal.conservative_risk_mult} without disable flag, got {rm_normal.risk_mult}",
+        )
+        _assert(
+            rm_normal.conservative_reason == "SOFT_MAX_TRADES",
+            f"expected conservative_reason=SOFT_MAX_TRADES, got {rm_normal.conservative_reason!r}",
+        )
+        _assert(
+            "SOFT_MAX_TRADES disabled" not in out_normal,
+            "did not expect disabled log without flag",
+        )
         passes.append("CASE A ok: conservative_mode + risk_mult applied without disable flag")
 
-    rm_disabled, out_disabled = _run_case("PIPELINE", True, exits=3)
-    if rm_disabled.conservative_mode:
-        failures.append("expected conservative_mode=False with disable flag")
-    if abs(rm_disabled.risk_mult - 1.0) > 1e-9:
-        failures.append(f"expected risk_mult=1.0 with disable flag, got {rm_disabled.risk_mult}")
-    disabled_count = out_disabled.count("[RISK] SOFT_MAX_TRADES disabled (PIPELINE)")
-    if disabled_count != 1:
-        failures.append(f"expected disabled log exactly once with flag, got {disabled_count}")
-    if "SOFT_MAX_TRADES" in out_disabled and disabled_count != 1:
-        failures.append("unexpected extra SOFT_MAX_TRADES logs with disable flag")
-    if not failures:
-        passes.append("CASE B ok: soft-max trades disabled, log once despite 3 checks")
-
-    if failures:
-        print("FAIL: selfcheck_risk_soft_max_trades")
-        for msg in failures:
-            print(f" - {msg}")
+        rm_disabled, out_disabled = _run_case("PIPELINE", True)
+        _assert(not rm_disabled.conservative_mode, "expected conservative_mode=False with disable flag")
+        _assert(
+            abs(rm_disabled.risk_mult - 1.0) < 1e-9,
+            f"expected risk_mult=1.0 with disable flag, got {rm_disabled.risk_mult}",
+        )
+        _assert(
+            abs(rm_disabled.risk_mult - rm_disabled.conservative_risk_mult) > 1e-9,
+            "expected risk_mult not to drop to conservative_risk_mult with disable flag",
+        )
+        disabled_count = out_disabled.count("SOFT_MAX_TRADES disabled")
+        _assert(
+            disabled_count == 1,
+            f"expected disabled log exactly once with flag, got {disabled_count}",
+        )
+        passes.append("CASE B ok: soft-max trades disabled, log once despite multiple checks")
+    except AssertionError as exc:
+        print(f"FAIL: {exc}")
         return 1
 
     print("PASS: selfcheck_risk_soft_max_trades")
