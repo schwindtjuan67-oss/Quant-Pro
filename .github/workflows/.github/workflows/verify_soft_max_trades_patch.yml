@@ -1,0 +1,119 @@
+name: Verify soft max trades patch
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: "pip"
+
+      - name: Install deps (best-effort)
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          if [ -f requirements-dev.txt ]; then pip install -r requirements-dev.txt; fi
+          if [ -f requirements/base.txt ]; then pip install -r requirements/base.txt; fi
+          if [ -f pyproject.toml ]; then pip install -e . || true; fi
+
+      - name: Run verifier
+        shell: bash
+        env:
+          RUN_MODE: "PIPELINE"
+          PIPELINE_DISABLE_SOFT_MAX_TRADES: "1"
+        run: |
+          python -m analysis.verify_soft_max_trades_patch
+
+      # ✅ Garantiza que SIEMPRE exista report.txt para el artifact
+      - name: Ensure report.txt exists
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p results/health/soft_max_trades_verify
+          if [ ! -f results/health/soft_max_trades_verify/report.txt ]; then
+            {
+              echo "report.txt missing; verifier may have crashed before writing."
+              echo "GITHUB_SHA=${GITHUB_SHA}"
+              echo "RUN_ID=${GITHUB_RUN_ID}"
+              echo "RUN_ATTEMPT=${GITHUB_RUN_ATTEMPT}"
+            } > results/health/soft_max_trades_verify/report.txt
+          fi
+
+      - name: Upload verification artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: soft-max-trades-verify-report
+          path: results/health/soft_max_trades_verify/**
+          if-no-files-found: error
+
+      - name: Publish report to job summary
+        if: always()
+        shell: bash
+        run: |
+          echo "## Soft Max Trades Verify Report" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          sed -n '1,200p' results/health/soft_max_trades_verify/report.txt >> "$GITHUB_STEP_SUMMARY" || true
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+  # Job opcional (manual) para demostrar "artifact incluso cuando falla"
+  proof-always-artifact:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install deps (best-effort)
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          if [ -f requirements-dev.txt ]; then pip install -r requirements-dev.txt; fi
+          if [ -f requirements/base.txt ]; then pip install -r requirements/base.txt; fi
+          if [ -f pyproject.toml ]; then pip install -e . || true; fi
+
+      # Este step FALLA apropósito. El artifact igual se sube por if: always().
+      - name: Forced failure (proof)
+        shell: bash
+        env:
+          RUN_MODE: "PIPELINE"
+          PIPELINE_DISABLE_SOFT_MAX_TRADES: "1"
+          FORCE_SOFT_MAX_TRADES_VERIFY_FAIL: "1"
+        run: |
+          python -m analysis.verify_soft_max_trades_patch
+
+      - name: Ensure report.txt exists
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p results/health/soft_max_trades_verify
+          if [ ! -f results/health/soft_max_trades_verify/report.txt ]; then
+            echo "FORCED FAIL: report missing (unexpected)" > results/health/soft_max_trades_verify/report.txt
+          fi
+
+      - name: Upload artifact (proof)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: soft-max-trades-verify-report-proof
+          path: results/health/soft_max_trades_verify/**
+          if-no-files-found: warn
