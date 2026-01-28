@@ -32,6 +32,7 @@ set "PIPELINE_DISABLE_TRADE_LOG=1"
 set "PIPELINE_VERBOSE_DIAGNOSTICS=0"
 set "PIPELINE_VERBOSE_HYBRID=0"
 set "PIPELINE_DISABLE_GPU=0"
+set "PIPELINE_DISABLE_SOFT_MAX_TRADES=1"
 
 if not exist "%ROOT%\analysis\__init__.py" (
   type nul > "%ROOT%\analysis\__init__.py"

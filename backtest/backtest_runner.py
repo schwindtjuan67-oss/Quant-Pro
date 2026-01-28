@@ -160,12 +160,16 @@ class BacktestRunner:
 
                 self.order_manager = ShadowOrderManager(self.symbol, self.config)
                 self.router = self.order_manager
+                risk_cfg = self.config.get("risk", {}) if isinstance(self.config, dict) else {}
 
                 self.risk_manager = RiskManager(
                     max_loss_pct=self.config.get("max_loss", 0.03),
                     max_dd_pct=self.config.get("max_dd", 0.04),
                     max_trades=self.config.get("max_trades", 12),
                     starting_equity=1000.0,
+                    disable_soft_max_trades=(
+                        risk_cfg.get("disable_soft_max_trades") if isinstance(risk_cfg, dict) else None
+                    ),
                 )
 
                 if delta_ok:

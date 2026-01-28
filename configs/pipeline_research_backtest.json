@@ -23,7 +23,8 @@
     "max_positions": 1,
     "use_atr_stop": true,
     "min_rr": 0.8,
-    "max_daily_loss_pct": 0.03
+    "max_daily_loss_pct": 0.03,
+    "disable_soft_max_trades": true
   },
 
   "execution": {

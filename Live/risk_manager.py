@@ -8,7 +8,15 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
+import os
 from typing import Optional, Dict, Any
+
+
+def is_truthy_env(name: str) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return False
+    return value.strip().lower() in ("1", "true", "yes", "on")
 
 
 @dataclass
@@ -43,6 +51,7 @@ class RiskManager:
         cooldown_on_loss_sec: int = 0,             # cooldown tras un loss (opcional)
         cooldown_on_streak_sec: int = 600,         # cooldown si se rompe max_consecutive_losses
         timezone_name: str = "America/Argentina/Buenos_Aires",
+        disable_soft_max_trades: Optional[bool] = None,
     ):
         # config base
         self.max_loss_pct = float(max_loss_pct)
@@ -88,6 +97,18 @@ class RiskManager:
         self.cooldown_on_loss_sec = int(cooldown_on_loss_sec)
         self.cooldown_on_streak_sec = int(cooldown_on_streak_sec)
 
+        self.run_mode = os.getenv("RUN_MODE", "LIVE").upper().strip()
+        self.disable_soft_max_trades = False
+        self._soft_max_trades_disable_logged = False
+        config_disable = bool(disable_soft_max_trades) if disable_soft_max_trades is not None else False
+        env_disable = False
+        if self.run_mode == "PIPELINE":
+            env_disable = is_truthy_env("PIPELINE_DISABLE_SOFT_MAX_TRADES") or is_truthy_env(
+                "RISK_DISABLE_SOFT_MAX_TRADES"
+            )
+        if self.run_mode == "PIPELINE":
+            self.disable_soft_max_trades = bool(env_disable or config_disable)
+
     # -----------------------------------------------------------
     # Internals: day key
     # -----------------------------------------------------------
@@ -129,6 +150,7 @@ class RiskManager:
         self.last_pnl_abs = None
 
         self.cooldown_until_ts = 0.0
+        self._soft_max_trades_disable_logged = False
 
         print(f"[RISK] Daily reset ({self.day_key}). day_start_equity={self.day_start_equity:.4f}")
 
@@ -208,7 +230,12 @@ class RiskManager:
 
             # soft: si excede trades, conservador (pero no hard stop)
             if self.trades_today >= int(self.soft_trades_after):
-                self.set_conservative(reason="SOFT_MAX_TRADES", risk_mult=self.conservative_risk_mult)
+                if self.disable_soft_max_trades:
+                    if not self._soft_max_trades_disable_logged and self.run_mode == "PIPELINE":
+                        print("[RISK] SOFT_MAX_TRADES disabled (PIPELINE)")
+                        self._soft_max_trades_disable_logged = True
+                else:
+                    self.set_conservative(reason="SOFT_MAX_TRADES", risk_mult=self.conservative_risk_mult)
 
             # soft: racha de pérdidas -> cooldown más fuerte
             if self.consecutive_losses >= int(self.max_consecutive_losses):
@@ -338,6 +365,7 @@ class RiskManager:
             "conservative_mode": bool(self.conservative_mode),
             "conservative_reason": str(self.conservative_reason),
             "risk_mult": float(self.risk_mult),
+            "disable_soft_max_trades": bool(self.disable_soft_max_trades),
 
             # streaks/cooldown
             "consecutive_losses": int(self.consecutive_losses),
