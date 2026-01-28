@@ -40475,3 +40475,218 @@ PermissionError: [Errno 13] Permission denied: 'logs\\autoloop_ABC.log'
 [HEALTH][POST-A] rc=1
 [HEALTH][POST-A] ABORTING (health gate failed rc=1)
 [END] 28/01/2026  8:03:17,22
+=====================================================
+[BOOT] 28/01/2026  8:18:58,38
+ROOT=C:\Users\PC\Documents\GitHub\Quant-Pro
+DATA=datasets\SOLUSDT\1m
+WINDOWS=2020-09_2020-12 2021-01_2021-12 2022-01_2023-06
+=====================================================
+[CYCLE] seed_base=6013 seeds=6013 6014 6015
+[ROBUST] window=2020-09_2020-12 seed=6013 out=results\robust\robust_2020-09_2020-12_seed6013.json
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "C:\Users\PC\Documents\GitHub\Quant-Pro\analysis\robust_optimizer.py", line 33, in <module>
+    from backtest.run_backtest import _date_range_to_ms, _iter_candles_from_csvs
+  File "C:\Users\PC\Documents\GitHub\Quant-Pro\backtest\run_backtest.py", line 23, in <module>
+    from .backtest_runner import BacktestRunner
+  File "C:\Users\PC\Documents\GitHub\Quant-Pro\backtest\backtest_runner.py", line 312
+    _bt_print(f\"[PARAM-CHECK] {key}: expected={expected[key]} got={val} via {target}\")
+                ^
+SyntaxError: unexpected character after line continuation character
+[ROBUST] window=2020-09_2020-12 seed=6014 out=results\robust\robust_2020-09_2020-12_seed6014.json
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "C:\Users\PC\Documents\GitHub\Quant-Pro\analysis\robust_optimizer.py", line 33, in <module>
+    from backtest.run_backtest import _date_range_to_ms, _iter_candles_from_csvs
+  File "C:\Users\PC\Documents\GitHub\Quant-Pro\backtest\run_backtest.py", line 23, in <module>
+    from .backtest_runner import BacktestRunner
+  File "C:\Users\PC\Documents\GitHub\Quant-Pro\backtest\backtest_runner.py", line 312
+    _bt_print(f\"[PARAM-CHECK] {key}: expected={expected[key]} got={val} via {target}\")
+                ^
+SyntaxError: unexpected character after line continuation character
+[ROBUST] window=2020-09_2020-12 seed=6015 out=results\robust\robust_2020-09_2020-12_seed6015.json
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "C:\Users\PC\Documents\GitHub\Quant-Pro\analysis\robust_optimizer.py", line 33, in <module>
+    from backtest.run_backtest import _date_range_to_ms, _iter_candles_from_csvs
+  File "C:\Users\PC\Documents\GitHub\Quant-Pro\backtest\run_backtest.py", line 23, in <module>
+    from .backtest_runner import BacktestRunner
+  File "C:\Users\PC\Documents\GitHub\Quant-Pro\backtest\backtest_runner.py", line 312
+    _bt_print(f\"[PARAM-CHECK] {key}: expected={expected[key]} got={val} via {target}\")
+                ^
+SyntaxError: unexpected character after line continuation character
+[ROBUST] window=2021-01_2021-12 seed=6013 out=results\robust\robust_2021-01_2021-12_seed6013.json
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "C:\Users\PC\Documents\GitHub\Quant-Pro\analysis\robust_optimizer.py", line 33, in <module>
+    from backtest.run_backtest import _date_range_to_ms, _iter_candles_from_csvs
+  File "C:\Users\PC\Documents\GitHub\Quant-Pro\backtest\run_backtest.py", line 23, in <module>
+    from .backtest_runner import BacktestRunner
+  File "C:\Users\PC\Documents\GitHub\Quant-Pro\backtest\backtest_runner.py", line 312
+    _bt_print(f\"[PARAM-CHECK] {key}: expected={expected[key]} got={val} via {target}\")
+                ^
+SyntaxError: unexpected character after line continuation character
+[ROBUST] window=2021-01_2021-12 seed=6014 out=results\robust\robust_2021-01_2021-12_seed6014.json
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "C:\Users\PC\Documents\GitHub\Quant-Pro\analysis\robust_optimizer.py", line 33, in <module>
+    from backtest.run_backtest import _date_range_to_ms, _iter_candles_from_csvs
+  File "C:\Users\PC\Documents\GitHub\Quant-Pro\backtest\run_backtest.py", line 23, in <module>
+    from .backtest_runner import BacktestRunner
+  File "C:\Users\PC\Documents\GitHub\Quant-Pro\backtest\backtest_runner.py", line 312
+    _bt_print(f\"[PARAM-CHECK] {key}: expected={expected[key]} got={val} via {target}\")
+                ^
+SyntaxError: unexpected character after line continuation character
+[ROBUST] window=2021-01_2021-12 seed=6015 out=results\robust\robust_2021-01_2021-12_seed6015.json
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "C:\Users\PC\Documents\GitHub\Quant-Pro\analysis\robust_optimizer.py", line 33, in <module>
+    from backtest.run_backtest import _date_range_to_ms, _iter_candles_from_csvs
+  File "C:\Users\PC\Documents\GitHub\Quant-Pro\backtest\run_backtest.py", line 23, in <module>
+    from .backtest_runner import BacktestRunner
+  File "C:\Users\PC\Documents\GitHub\Quant-Pro\backtest\backtest_runner.py", line 312
+    _bt_print(f\"[PARAM-CHECK] {key}: expected={expected[key]} got={val} via {target}\")
+                ^
+SyntaxError: unexpected character after line continuation character
+[ROBUST] window=2022-01_2023-06 seed=6013 out=results\robust\robust_2022-01_2023-06_seed6013.json
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "C:\Users\PC\Documents\GitHub\Quant-Pro\analysis\robust_optimizer.py", line 33, in <module>
+    from backtest.run_backtest import _date_range_to_ms, _iter_candles_from_csvs
+  File "C:\Users\PC\Documents\GitHub\Quant-Pro\backtest\run_backtest.py", line 23, in <module>
+    from .backtest_runner import BacktestRunner
+  File "C:\Users\PC\Documents\GitHub\Quant-Pro\backtest\backtest_runner.py", line 312
+    _bt_print(f\"[PARAM-CHECK] {key}: expected={expected[key]} got={val} via {target}\")
+                ^
+SyntaxError: unexpected character after line continuation character
+[ROBUST] window=2022-01_2023-06 seed=6014 out=results\robust\robust_2022-01_2023-06_seed6014.json
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "C:\Users\PC\Documents\GitHub\Quant-Pro\analysis\robust_optimizer.py", line 33, in <module>
+    from backtest.run_backtest import _date_range_to_ms, _iter_candles_from_csvs
+  File "C:\Users\PC\Documents\GitHub\Quant-Pro\backtest\run_backtest.py", line 23, in <module>
+    from .backtest_runner import BacktestRunner
+  File "C:\Users\PC\Documents\GitHub\Quant-Pro\backtest\backtest_runner.py", line 312
+    _bt_print(f\"[PARAM-CHECK] {key}: expected={expected[key]} got={val} via {target}\")
+                ^
+SyntaxError: unexpected character after line continuation character
+[ROBUST] window=2022-01_2023-06 seed=6015 out=results\robust\robust_2022-01_2023-06_seed6015.json
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "C:\Users\PC\Documents\GitHub\Quant-Pro\analysis\robust_optimizer.py", line 33, in <module>
+    from backtest.run_backtest import _date_range_to_ms, _iter_candles_from_csvs
+  File "C:\Users\PC\Documents\GitHub\Quant-Pro\backtest\run_backtest.py", line 23, in <module>
+    from .backtest_runner import BacktestRunner
+  File "C:\Users\PC\Documents\GitHub\Quant-Pro\backtest\backtest_runner.py", line 312
+    _bt_print(f\"[PARAM-CHECK] {key}: expected={expected[key]} got={val} via {target}\")
+                ^
+SyntaxError: unexpected character after line continuation character
+[POST][ERROR] Robust file is not a list: C:\Users\PC\Documents\GitHub\Quant-Pro\results\robust\robust_mini_2021H1_seed1337.json
+[HEALTH][POST-A] running health check
+[HEALTH] contract_ok=False liveness_ok=False A_passed=2 faseA_count=0 faseB_count=0 stop=True reason="CONTRACT_FAIL" exit_code=2
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "C:\Users\PC\Documents\GitHub\Quant-Pro\analysis\pipeline_health.py", line 662, in <module>
+    main()
+    ~~~~^^
+  File "C:\Users\PC\Documents\GitHub\Quant-Pro\analysis\pipeline_health.py", line 650, in main
+    _log_line(args.log, line)
+    ~~~~~~~~~^^^^^^^^^^^^^^^^
+  File "C:\Users\PC\Documents\GitHub\Quant-Pro\analysis\pipeline_health.py", line 577, in _log_line
+    with open(path, "a", encoding="utf-8") as f:
+         ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+PermissionError: [Errno 13] Permission denied: 'logs\\autoloop_ABC.log'
+[HEALTH][POST-A] rc=1
+[HEALTH][POST-A] ABORTING (health execution error rc=1)
+[END] 28/01/2026  8:19:11,20
+=====================================================
+[BOOT] 28/01/2026  8:27:24,34
+ROOT=C:\Users\PC\Documents\GitHub\Quant-Pro
+DATA=datasets\SOLUSDT\1m
+WINDOWS=2020-09_2020-12 2021-01_2021-12 2022-01_2023-06
+=====================================================
+[CYCLE] seed_base=6016 seeds=6016 6017 6018
+[ROBUST] window=2020-09_2020-12 seed=6016 out=results\robust\robust_2020-09_2020-12_seed6016.json
+[ROBUST] loading dataset...
+[ROBUST] date_from=2020-09-01 date_to=2020-12-31 window='2020-09_2020-12'
+[ROBUST][DATA] input=datasets\SOLUSDT\1m interval=1m interval_dir=- found_csv=65 found_pkl=0 selected_kind=csv selected_files=65
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2020-08.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2020-09.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2020-10.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2020-11.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2020-12.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2021-01.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2021-02.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2021-03.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2021-04.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2021-05.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2021-06.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2021-07.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2021-08.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2021-09.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2021-10.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2021-11.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2021-12.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2022-01.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2022-02.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2022-03.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2022-04.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2022-05.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2022-06.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2022-07.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2022-08.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2022-09.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2022-10.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2022-11.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2022-12.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2023-01.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2023-02.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2023-03.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2023-04.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2023-05.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2023-06.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2023-07.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2023-08.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2023-09.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2023-10.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2023-11.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2023-12.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2024-01.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2024-02.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2024-03.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2024-04.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2024-05.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2024-06.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2024-07.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2024-08.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2024-09.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2024-10.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2024-11.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2024-12.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2025-01.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2025-02.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2025-03.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2025-04.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2025-05.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2025-06.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2025-07.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2025-08.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2025-09.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2025-10.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2025-11.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2025-12.csv
+[ROBUST][DATA] candles_range=2020-09-01T00:00:00+00:00 -> 2020-12-30T23:59:00+00:00
+[ROBUST] data size = 173872
+[ROBUST] Using REAL backtest function (in-memory).
+[ROBUST] Parallel enabled: workers=2 (spawn-safe) batch_size=32
+[ROBUST][HB] done=32/290 passed=0 failed=32 elapsed=00:00:40 rate=0.78 params/s window=2020-09_2020-12 seed=6016 top_fails: fold 0: min_trades (1)=32, fold 1: min_trades (1)=32, fold 2: min_trades (1)=32

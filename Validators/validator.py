@@ -1,4 +1,4 @@
-from analysis.config_selector import ConfigSelector
+﻿from analysis.config_selector import ConfigSelector
 from analysis.selector_telemetry import emit_selector_telemetry
 
 selector = ConfigSelector()
@@ -15,4 +15,4 @@ emit_selector_telemetry(
     selector_meta=meta,
 )
 
-print(OK selector + telemetry)
+print(OK, selector, telemetry)

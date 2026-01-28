@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
@@ -60,7 +60,7 @@ class BacktestRunner:
     - Ejecuta HybridAdapterShadow offline
     - Captura trades desde TradeLogger
     - Equity en R
-    - GPU acceleration vía GPUCandleFeeder (opcional)
+    - GPU acceleration vÃ­a GPUCandleFeeder (opcional)
     """
 
     def __init__(
@@ -309,7 +309,7 @@ class BacktestRunner:
                         _bt_print(f"[PARAM-CHECK] {key}: failed to read attr {target}")
                         continue
                     if val != expected[key]:
-                        _bt_print(f\"[PARAM-CHECK] {key}: expected={expected[key]} got={val} via {target}\")
+                        _bt_print(f"[PARAM-CHECK] {key}: expected={expected[key]} got={val} via {target}")
 
             def _apply_extra_kwargs(self, strategy: Any, extra: Dict[str, Any]) -> None:
                 for k, v in (extra or {}).items():
@@ -387,7 +387,7 @@ class BacktestRunner:
         live_candles = self.candles[self.warmup :]
 
         # ---------------- MAIN LOOP ----------------
-        # (extra safety, aunque ya está contemplado en __init__)
+        # (extra safety, aunque ya estÃ¡ contemplado en __init__)
         if self.use_gpu and PIPELINE_DISABLE_GPU:
             self.use_gpu = False
 
