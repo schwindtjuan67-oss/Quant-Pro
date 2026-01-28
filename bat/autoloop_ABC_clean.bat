@@ -137,9 +137,10 @@ REM =====================================================
 REM SELF-CHECK FAIL-FAST
 REM =====================================================
 REM En pipeline validamos que SOFT_MAX_TRADES solo se desactiva con el flag de pipeline.
-"%PYTHON%" -m analysis.selfcheck_risk_soft_max_trades || (
+%PYTHON% -m analysis.selfcheck_risk_soft_max_trades
+if errorlevel 1 (
   echo [FATAL] selfcheck_risk_soft_max_trades failed
-  exit /b 1
+  exit /b %ERRORLEVEL%
 )
 
 REM =====================================================
