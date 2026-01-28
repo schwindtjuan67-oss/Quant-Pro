@@ -136,6 +136,12 @@ if not exist "%SEED_STATE_FILE%" echo %START_SEED%>"%SEED_STATE_FILE%"
 REM =====================================================
 REM SELF-CHECK FAIL-FAST
 REM =====================================================
+REM Verifica que el patch de SOFT_MAX_TRADES en pipeline está aplicado correctamente.
+%PYTHON% -m analysis.verify_soft_max_trades_patch
+if errorlevel 1 (
+  echo [FATAL] verify_soft_max_trades_patch failed
+  exit /b %ERRORLEVEL%
+)
 REM En pipeline validamos que SOFT_MAX_TRADES solo se desactiva con el flag de pipeline.
 %PYTHON% -m analysis.selfcheck_risk_soft_max_trades
 if errorlevel 1 (

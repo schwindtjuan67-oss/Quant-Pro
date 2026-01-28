@@ -15,6 +15,11 @@ CASE_OUTPUTS = {
     "case2": RESULTS_DIR / "case2.out.txt",
     "case3": RESULTS_DIR / "case3.out.txt",
 }
+CASE_ERROR_OUTPUTS = {
+    "case1": RESULTS_DIR / "case1.err.txt",
+    "case2": RESULTS_DIR / "case2.err.txt",
+    "case3": RESULTS_DIR / "case3.err.txt",
+}
 
 
 @dataclass
@@ -243,6 +248,7 @@ def main() -> int:
         stdout, stderr, returncode = _run_case(name, env)
         output_path = CASE_OUTPUTS[name]
         output_path.write_text(stdout, encoding="utf-8")
+        CASE_ERROR_OUTPUTS[name].write_text(stderr, encoding="utf-8")
         if returncode != 0:
             details = [
                 f"Subprocess exit code {returncode}.",

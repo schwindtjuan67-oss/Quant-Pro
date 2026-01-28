@@ -32,6 +32,7 @@ Thumbs.db
 # Nota: no se ignoran `logs/`, ni `*.csv`, ni `state_*.json` para conservar históricos importantes.
 node_modules
 
-#Resultados: 
-
+#Resultados:
+# Salidas generadas por verificaciones y pipelines.
 results/
+results/health/soft_max_trades_verify/
