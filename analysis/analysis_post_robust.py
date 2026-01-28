@@ -131,6 +131,10 @@ def parse_filename(path: str) -> Optional[Tuple[str, int]]:
     return match.group("window"), int(match.group("seed"))
 
 
+def _is_valid_window(window: str) -> bool:
+    return bool(re.match(r"^\d{4}-\d{2}_\d{4}-\d{2}$", window))
+
+
 def normalize_metrics(rec: Dict[str, Any]) -> Dict[str, float]:
     """
     Fuente canónica: folds.
@@ -254,9 +258,12 @@ def main() -> None:
     for fp in files:
         parsed = parse_filename(fp)
         if not parsed:
-            print(f"[POST][WARN] skipping unrecognized robust filename: {os.path.basename(fp)}")
+            print(f"[POST][WARN] Invalid robust filename, skipping: {fp}")
             continue
         window, seed = parsed
+        if not _is_valid_window(window):
+            print(f"[POST][WARN] Invalid robust filename, skipping: {fp}")
+            continue
 
         try:
             with open(fp, "r", encoding="utf-8") as f:
