@@ -201,7 +201,6 @@ echo [HEALTH][POST-A] running health check
 
 %PYTHON% -m analysis.pipeline_health ^
   --root "%ROOT%" ^
- ^
   --out "%HEALTH_OUT%" ^
   --stop-file "%STOP_FILE%" ^
   --stop-on-contract-fail ^
@@ -243,7 +242,6 @@ echo [HEALTH][POST-B] running health check
 >>"%LOG_FILE%" echo [HEALTH][POST-B] running health check
 %PYTHON% -m analysis.pipeline_health ^
   --root "%ROOT%" ^
- ^
   --out "%HEALTH_OUT%" ^
   --stop-file "%STOP_FILE%" ^
   --stop-on-contract-fail ^
@@ -295,7 +293,6 @@ echo [HEALTH][POST-C] running health check
 >>"%LOG_FILE%" echo [HEALTH][POST-C] running health check
 %PYTHON% -m analysis.pipeline_health ^
   --root "%ROOT%" ^
- ^
   --out "%HEALTH_OUT%" ^
   --stop-file "%STOP_FILE%" ^
   --stop-on-contract-fail ^
