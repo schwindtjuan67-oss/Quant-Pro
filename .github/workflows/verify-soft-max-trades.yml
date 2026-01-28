@@ -1,0 +1,37 @@
+name: verify-soft-max-trades
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Run soft max trades verification
+        env:
+          PYTHONPATH: .
+        run: python -m analysis.verify_soft_max_trades_patch
+      - name: Upload soft max trades report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: soft-max-trades-report
+          path: |
+            results/health/soft_max_trades_verify/report.txt
+            results/health/soft_max_trades_verify/
+          if-no-files-found: warn
