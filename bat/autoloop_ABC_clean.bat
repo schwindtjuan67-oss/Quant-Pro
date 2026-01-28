@@ -198,11 +198,23 @@ REM === HEALTH (POST-A) ===
 REM =========================
 echo [HEALTH][POST-A] running health check
 >>"%LOG_FILE%" echo [HEALTH][POST-A] running health check
-%PYTHON% -m analysis.pipeline_health --root "%ROOT%" --log "%LOG_FILE%" --out "%HEALTH_OUT%" --stop-file "%STOP_FILE%" >>"%LOG_FILE%" 2>&1
-if errorlevel 2 (
-  echo [HEALTH][POST-A] STOP triggered, aborting cycle
-  >>"%LOG_FILE%" echo [HEALTH][POST-A] STOP triggered, aborting cycle
-  exit /b %errorlevel%
+
+%PYTHON% -m analysis.pipeline_health ^
+  --root "%ROOT%" ^
+  --log "%LOG_FILE%" ^
+  --out "%HEALTH_OUT%" ^
+  --stop-file "%STOP_FILE%" ^
+  --stop-on-contract-fail ^
+  >>"%LOG_FILE%" 2>&1
+
+set "HC_RC=%ERRORLEVEL%"
+echo [HEALTH][POST-A] rc=%HC_RC%
+>>"%LOG_FILE%" echo [HEALTH][POST-A] rc=%HC_RC%
+
+if %HC_RC% GEQ 2 (
+  echo [HEALTH][POST-A] ABORTING (health gate failed rc=%HC_RC%)
+  >>"%LOG_FILE%" echo [HEALTH][POST-A] ABORTING (health gate failed rc=%HC_RC%)
+  exit /b %HC_RC%
 )
 
 REM =========================
@@ -222,11 +234,22 @@ REM === HEALTH (POST-B) ===
 REM =========================
 echo [HEALTH][POST-B] running health check
 >>"%LOG_FILE%" echo [HEALTH][POST-B] running health check
-%PYTHON% -m analysis.pipeline_health --root "%ROOT%" --log "%LOG_FILE%" --out "%HEALTH_OUT%" --stop-file "%STOP_FILE%" --stop-on-contract-fail >>"%LOG_FILE%" 2>&1
-if errorlevel 2 (
-  echo [HEALTH][POST-B] STOP triggered, aborting cycle
-  >>"%LOG_FILE%" echo [HEALTH][POST-B] STOP triggered, aborting cycle
-  exit /b %errorlevel%
+%PYTHON% -m analysis.pipeline_health ^
+  --root "%ROOT%" ^
+  --log "%LOG_FILE%" ^
+  --out "%HEALTH_OUT%" ^
+  --stop-file "%STOP_FILE%" ^
+  --stop-on-contract-fail ^
+  >>"%LOG_FILE%" 2>&1
+
+set "HC_RC=%ERRORLEVEL%"
+echo [HEALTH][POST-B] rc=%HC_RC%
+>>"%LOG_FILE%" echo [HEALTH][POST-B] rc=%HC_RC%
+
+if %HC_RC% GEQ 2 (
+  echo [HEALTH][POST-B] ABORTING (health gate failed rc=%HC_RC%)
+  >>"%LOG_FILE%" echo [HEALTH][POST-B] ABORTING (health gate failed rc=%HC_RC%)
+  exit /b %HC_RC%
 )
 
 REM =========================
@@ -256,8 +279,23 @@ REM === HEALTH (POST-C) ===
 REM =========================
 echo [HEALTH][POST-C] running health check
 >>"%LOG_FILE%" echo [HEALTH][POST-C] running health check
-%PYTHON% -m analysis.pipeline_health --root "%ROOT%" --log "%LOG_FILE%" --out "%HEALTH_OUT%" --stop-file "%STOP_FILE%" >>"%LOG_FILE%" 2>&1
-if exist "%STOP_FILE%" goto END
+%PYTHON% -m analysis.pipeline_health ^
+  --root "%ROOT%" ^
+  --log "%LOG_FILE%" ^
+  --out "%HEALTH_OUT%" ^
+  --stop-file "%STOP_FILE%" ^
+  --stop-on-contract-fail ^
+  >>"%LOG_FILE%" 2>&1
+
+set "HC_RC=%ERRORLEVEL%"
+echo [HEALTH][POST-C] rc=%HC_RC%
+>>"%LOG_FILE%" echo [HEALTH][POST-C] rc=%HC_RC%
+
+if %HC_RC% GEQ 2 (
+  echo [HEALTH][POST-C] ABORTING (health gate failed rc=%HC_RC%)
+  >>"%LOG_FILE%" echo [HEALTH][POST-C] ABORTING (health gate failed rc=%HC_RC%)
+  exit /b %HC_RC%
+)
 
 timeout /t %CYCLE_DELAY_SEC% /nobreak >nul
 exit /b 0
