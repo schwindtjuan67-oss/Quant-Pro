@@ -58,6 +58,55 @@ def _load_rules(path: str) -> Dict[str, Any]:
     return rules
 
 
+def _iter_records(data: Any, source_path: str) -> List[Dict[str, Any]]:
+    if isinstance(data, list):
+        return [r for r in data if isinstance(r, dict)]
+
+    if isinstance(data, dict) and {"params", "passed", "robust_score"}.issubset(data.keys()):
+        params = data.get("params", [])
+        passed = data.get("passed", [])
+        scores = data.get("robust_score", [])
+        fail_reason = data.get("fail_reason", [])
+        folds = data.get("folds", [])
+        meta = data.get("meta", {})
+
+        if not (isinstance(params, list) and isinstance(passed, list) and isinstance(scores, list)):
+            raise ValueError(f"Robust schema must include list params/passed/robust_score: {source_path}")
+
+        if not (len(params) == len(passed) == len(scores)):
+            raise ValueError(
+                f"Robust schema length mismatch in {source_path}: "
+                f"params={len(params)} passed={len(passed)} robust_score={len(scores)}"
+            )
+
+        records: List[Dict[str, Any]] = []
+        for i, param in enumerate(params):
+            score_val = scores[i]
+            try:
+                score_val = float(score_val)
+            except (TypeError, ValueError):
+                score_val = score_val
+            record_folds: List[Dict[str, Any]] = []
+            if isinstance(folds, list) and len(folds) == len(params):
+                if isinstance(folds[i], list):
+                    record_folds = [f for f in folds[i] if isinstance(f, dict)]
+            record: Dict[str, Any] = {
+                "params": param,
+                "passed": bool(passed[i]),
+                "robust_score": score_val,
+                "fail_reason": fail_reason[i] if isinstance(fail_reason, list) and i < len(fail_reason) else None,
+                "folds": record_folds,
+                "meta": meta,
+            }
+            records.append(record)
+        return records
+
+    if isinstance(data, dict):
+        raise ValueError(f"Unknown robust schema in {source_path}")
+
+    return []
+
+
 def parse_filename(path: str) -> Tuple[str, int]:
     name = os.path.basename(path)
     if "_seed" not in name:
@@ -153,11 +202,18 @@ def main() -> None:
     out_dir = os.path.join(root, "results", "promotions")
     os.makedirs(out_dir, exist_ok=True)
 
-    rules_path = (
-        args.rules
-        or os.getenv("PIPELINE_RULES")
-        or os.path.join(root, "configs", "promotion_rules_A.json")
-    )
+    rules_path = args.rules or os.getenv("PIPELINE_RULES")
+    if not rules_path:
+        primary_rules = os.path.join(root, "configs", "promotion_rules_A.json")
+        fallback_rules = os.path.join(os.path.dirname(__file__), "promotion_rules.json")
+        if os.path.exists(primary_rules):
+            rules_path = primary_rules
+        elif os.path.exists(fallback_rules):
+            rules_path = fallback_rules
+        else:
+            raise ValueError(
+                "Rules file not found. Expected configs/promotion_rules_A.json or analysis/promotion_rules.json"
+            )
 
     rules = _load_rules(rules_path)
     phase = str(rules.get("phase", "A")).upper()
@@ -186,10 +242,8 @@ def main() -> None:
         with open(fp, "r", encoding="utf-8") as f:
             data = json.load(f)
 
-        if not isinstance(data, list):
-            raise ValueError(f"Robust file is not a list: {fp}")
-
-        for r in data:
+        records = _iter_records(data, fp)
+        for r in records:
             if not isinstance(r, dict):
                 continue
 
@@ -240,18 +294,21 @@ def main() -> None:
                     "params": json.loads(key),
                     "windows": {},
                     "scores": [],
+                    "passed_seeds": [],
                     f"phase{phase}_frozen_keys": frozen_keys,
                     "phase": phase,
                 })
                 promoted[key]["windows"][window] = {
-                    "seeds": sorted(set(passed_seeds)),
+                    "passed_seeds": sorted(set(passed_seeds)),
                     "scores": scores,
                 }
                 promoted[key]["scores"].extend(scores)
+                promoted[key]["passed_seeds"].extend(passed_seeds)
 
     final: List[Dict[str, Any]] = []
     for p in promoted.values():
         if len(p["windows"]) >= min_windows_passes:
+            p["passed_seeds"] = sorted(set(p.get("passed_seeds", [])))
             p["promotion_score"] = promotion_score(p["scores"])
             final.append(p)
 
