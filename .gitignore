@@ -36,3 +36,6 @@ node_modules
 # Salidas generadas por verificaciones y pipelines.
 results/
 results/health/soft_max_trades_verify/
+
+#Logs:
+logs/
