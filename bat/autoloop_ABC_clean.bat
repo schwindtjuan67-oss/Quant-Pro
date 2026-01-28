@@ -1,4 +1,4 @@
-@echo off
+﻿@echo off
 setlocal ENABLEDELAYEDEXPANSION
 
 REM =====================================================
@@ -160,7 +160,7 @@ echo [CYCLE] seed_base=%SEED_BASE% seeds=%SEEDS%
 >>"%LOG_FILE%" echo [CYCLE] seed_base=%SEED_BASE% seeds=%SEEDS%
 
 REM =========================
-REM FASE A — ROBUST
+REM FASE A â€” ROBUST
 REM =========================
 set "PIPELINE_PHASE=A"
 set "PIPELINE_DISABLE_GPU=0"
@@ -189,7 +189,7 @@ for %%W in (%WINDOWS%) do (
 set "PIPELINE_DISABLE_GPU=0"
 
 REM =========================
-REM POST A — ÚNICO PROMOTOR A→B
+REM POST A â€” ÃšNICO PROMOTOR Aâ†’B
 REM =========================
 %PYTHON% -m analysis.analysis_post_robust >>"%LOG_FILE%" 2>&1
 
@@ -201,7 +201,7 @@ echo [HEALTH][POST-A] running health check
 
 %PYTHON% -m analysis.pipeline_health ^
   --root "%ROOT%" ^
-  --log "%LOG_FILE%" ^
+ ^
   --out "%HEALTH_OUT%" ^
   --stop-file "%STOP_FILE%" ^
   --stop-on-contract-fail ^
@@ -225,7 +225,7 @@ if %HC_RC% GEQ 2 (
 )
 
 REM =========================
-REM STAGE B — RISK CALIBRATION
+REM STAGE B â€” RISK CALIBRATION
 REM =========================
 %PYTHON% -m analysis.stage_b_risk_calibration ^
   --data "%DATA%" ^
@@ -243,7 +243,7 @@ echo [HEALTH][POST-B] running health check
 >>"%LOG_FILE%" echo [HEALTH][POST-B] running health check
 %PYTHON% -m analysis.pipeline_health ^
   --root "%ROOT%" ^
-  --log "%LOG_FILE%" ^
+ ^
   --out "%HEALTH_OUT%" ^
   --stop-file "%STOP_FILE%" ^
   --stop-on-contract-fail ^
@@ -267,7 +267,7 @@ if %HC_RC% GEQ 2 (
 )
 
 REM =========================
-REM STAGE C — SUPERVIVENCIA REAL
+REM STAGE C â€” SUPERVIVENCIA REAL
 REM =========================
 set PIPELINE_MIN_TRADES=400
 set PIPELINE_MIN_R_OBS=300
@@ -295,7 +295,7 @@ echo [HEALTH][POST-C] running health check
 >>"%LOG_FILE%" echo [HEALTH][POST-C] running health check
 %PYTHON% -m analysis.pipeline_health ^
   --root "%ROOT%" ^
-  --log "%LOG_FILE%" ^
+ ^
   --out "%HEALTH_OUT%" ^
   --stop-file "%STOP_FILE%" ^
   --stop-on-contract-fail ^
