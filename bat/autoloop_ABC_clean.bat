@@ -211,6 +211,13 @@ set "HC_RC=%ERRORLEVEL%"
 echo [HEALTH][POST-A] rc=%HC_RC%
 >>"%LOG_FILE%" echo [HEALTH][POST-A] rc=%HC_RC%
 
+if %HC_RC%==1 (
+  echo [HEALTH][POST-A] ABORTING (health execution error rc=1)
+  >>"%LOG_FILE%" echo [HEALTH][POST-A] ABORTING (health execution error rc=1)
+  echo HEALTH_EXEC_ERROR rc=1 %DATE% %TIME% > "%STOP_FILE%"
+  exit /b 1
+)
+
 if %HC_RC% GEQ 2 (
   echo [HEALTH][POST-A] ABORTING (health gate failed rc=%HC_RC%)
   >>"%LOG_FILE%" echo [HEALTH][POST-A] ABORTING (health gate failed rc=%HC_RC%)
@@ -245,6 +252,13 @@ echo [HEALTH][POST-B] running health check
 set "HC_RC=%ERRORLEVEL%"
 echo [HEALTH][POST-B] rc=%HC_RC%
 >>"%LOG_FILE%" echo [HEALTH][POST-B] rc=%HC_RC%
+
+if %HC_RC%==1 (
+  echo [HEALTH][POST-B] ABORTING (health execution error rc=1)
+  >>"%LOG_FILE%" echo [HEALTH][POST-B] ABORTING (health execution error rc=1)
+  echo HEALTH_EXEC_ERROR rc=1 %DATE% %TIME% > "%STOP_FILE%"
+  exit /b 1
+)
 
 if %HC_RC% GEQ 2 (
   echo [HEALTH][POST-B] ABORTING (health gate failed rc=%HC_RC%)
@@ -290,6 +304,13 @@ echo [HEALTH][POST-C] running health check
 set "HC_RC=%ERRORLEVEL%"
 echo [HEALTH][POST-C] rc=%HC_RC%
 >>"%LOG_FILE%" echo [HEALTH][POST-C] rc=%HC_RC%
+
+if %HC_RC%==1 (
+  echo [HEALTH][POST-C] ABORTING (health execution error rc=1)
+  >>"%LOG_FILE%" echo [HEALTH][POST-C] ABORTING (health execution error rc=1)
+  echo HEALTH_EXEC_ERROR rc=1 %DATE% %TIME% > "%STOP_FILE%"
+  exit /b 1
+)
 
 if %HC_RC% GEQ 2 (
   echo [HEALTH][POST-C] ABORTING (health gate failed rc=%HC_RC%)

@@ -1,124 +1,74 @@
 #!/usr/bin/env python3
 # analysis/analysis_post_robust.py
-
 from __future__ import annotations
 
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-import os
-import sys
-import json
-import glob
+import argparse
 import csv
+import glob
+import json
+import os
 import statistics
-from typing import Dict, List, Any, Tuple, Optional
+import sys
+from typing import Any, Dict, List, Optional, Tuple
 
-# -------------------------------------------------
-# PATH SETUP
-# -------------------------------------------------
+_PHASE_KEYS = {
+    "A": {
+        "ema_fast",
+        "ema_slow",
+        "delta_threshold",
+        "delta_rolling_sec",
+    },
+    "B": {
+        "atr_len",
+        "sl_atr_mult",
+        "tp_atr_mult",
+        "rr_min",
+        "cooldown_sec",
+        "max_trades_day",
+        "use_time_filter",
+        "hour_start",
+        "hour_end",
+    },
+}
 
-=======
-import os, sys, json, glob, statistics
-from typing import Dict, List, Any, Tuple, Optional
 
->>>>>>> Stashed changes
-=======
-import os, sys, json, glob, statistics
-from typing import Dict, List, Any, Tuple, Optional
+def _normalize_phase(phase: Optional[str] = None) -> str:
+    p = (phase or os.getenv("PIPELINE_PHASE", "") or "").strip().upper()
+    if not p:
+        return "FULL"
+    if p in ("C", "EVAL"):
+        return "C"
+    if p in ("A", "B"):
+        return p
+    return "FULL"
 
->>>>>>> Stashed changes
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if ROOT not in sys.path:
-    sys.path.insert(0, ROOT)
 
-from analysis.opt_space import phase_keys
+def phase_keys(phase: Optional[str] = None) -> List[str]:
+    p = _normalize_phase(phase)
+    if p in ("FULL", "C"):
+        return []
+    return sorted(list(_PHASE_KEYS.get(p, set())))
 
-# -------------------------------------------------
-# CONFIG (GENERIC)
-# -------------------------------------------------
 
-ROBUST_DIR = "results/robust"
-OUT_DIR = "results/promotions"
-RULES_PATH = os.path.join("configs", "promotion_rules_A.json")
+def _load_rules(path: str) -> Dict[str, Any]:
+    with open(path, "r", encoding="utf-8") as f:
+        rules = json.load(f)
+    if not isinstance(rules, dict):
+        raise ValueError(f"Rules file must be an object: {path}")
+    return rules
 
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-RULES_PATH = os.getenv(
-    "PIPELINE_RULES",
-    os.path.join("configs", "promotion_rules_A.json"),
-)
 
-WHY_REJECTED_CSV = os.path.join(
-    OUT_DIR,
-    f"why_rejected_{os.path.basename(RULES_PATH).replace('.json','')}.csv"
-)
+def parse_filename(path: str) -> Tuple[str, int]:
+    name = os.path.basename(path)
+    if "_seed" not in name:
+        raise ValueError(f"Invalid robust filename (missing _seed): {name}")
+    parts = name.replace(".json", "").split("_seed")
+    if len(parts) != 2 or not parts[1].isdigit():
+        raise ValueError(f"Invalid robust filename: {name}")
+    window = parts[0].replace("robust_", "")
+    return window, int(parts[1])
 
-SEEDS: Optional[set] = None  # None = aceptar cualquier seed
 
-# -------------------------------------------------
-# LOAD RULES
-# -------------------------------------------------
-
-=======
-=======
->>>>>>> Stashed changes
-SEEDS: Optional[set] = None          # None = aceptar cualquier seed
-MIN_SEED_PASSES = 1                 # seeds mínimos por ventana
-MIN_WINDOWS_PASSES = 2              # ventanas mínimas
-TOP_K_PROMOTED = 30
-
-<<<<<<< Updated upstream
-=======
-# ===============================
-# RULE LOADING
-# ===============================
-
-with open(RULES_PATH, "r", encoding="utf-8") as f:
-    RULES = json.load(f)
-
->>>>>>> Stashed changes
-# ===============================
-# RULE LOADING
-# ===============================
-
-<<<<<<< Updated upstream
->>>>>>> Stashed changes
-with open(RULES_PATH, "r", encoding="utf-8") as f:
-    RULES = json.load(f)
-=======
-def _metric(rec: Dict[str, Any], key: str, default=0.0) -> float:
-    agg = rec.get("agg", {}) or {}
-    return float(agg.get(key, default) or default)
-
-def _passes_rules(rec: Dict[str, Any]) -> bool:
-    agg = rec.get("agg", {}) or {}
-    folds = rec.get("folds", []) or []
->>>>>>> Stashed changes
-
-FILTERS = RULES.get("filters", {})
-PROMOTION = RULES.get("promotion", {})
-PHASE = str(RULES.get("phase", "A")).upper()
-
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-MIN_SEED_PASSES = int(PROMOTION.get("min_seeds_passed", 1))
-MIN_WINDOWS_PASSES = int(PROMOTION.get("min_windows_passed", 1))
-TOP_K_PROMOTED = int(PROMOTION.get("top_k", 50))
-=======
-def _metric(rec: Dict[str, Any], key: str, default=0.0) -> float:
-    agg = rec.get("agg", {}) or {}
-    return float(agg.get(key, default) or default)
-
-def _passes_rules(rec: Dict[str, Any]) -> bool:
-    agg = rec.get("agg", {}) or {}
-    folds = rec.get("folds", []) or []
->>>>>>> Stashed changes
-
-# -------------------------------------------------
-# METRIC NORMALIZATION (CANONICAL)
-# -------------------------------------------------
-
-<<<<<<< Updated upstream
 def normalize_metrics(rec: Dict[str, Any]) -> Dict[str, float]:
     """
     Fuente canónica: folds.
@@ -128,75 +78,56 @@ def normalize_metrics(rec: Dict[str, Any]) -> Dict[str, float]:
 
     def _vals(key: str, default: float = 0.0) -> List[float]:
         return [
-            float(f.get("metrics", {}).get(key, default))
+            float((f.get("metrics", {}) or {}).get(key, default))
             for f in folds
             if isinstance(f, dict)
         ]
 
-    trades = _vals("trades", 0)
+    trades = _vals("trades", 0.0)
     pf = _vals("profit_factor", 0.0)
     wr = _vals("winrate", 0.0)
-    dd = [abs(v) for v in _vals("max_drawdown_r", 999)]
+    dd = [abs(v) for v in _vals("max_drawdown_r", 999.0)]
     exp = _vals("expectancy", 0.0)
     rs = _vals("robust_score", -1e9)
 
     return {
-        "trades_min": min(trades) if trades else 0,
-        "trades_mean": statistics.mean(trades) if trades else 0,
-
+        "trades_min": min(trades) if trades else 0.0,
+        "trades_mean": statistics.mean(trades) if trades else 0.0,
         "pf_min": min(pf) if pf else 0.0,
         "pf_mean": statistics.mean(pf) if pf else 0.0,
-
         "winrate_min": min(wr) if wr else 0.0,
         "winrate_mean": statistics.mean(wr) if wr else 0.0,
-
-        "dd_max": max(dd) if dd else 999,
-
+        "dd_max": max(dd) if dd else 999.0,
         "expectancy_mean": statistics.mean(exp) if exp else 0.0,
-
         "robust_score_min": min(rs) if rs else -1e9,
         "robust_score_mean": statistics.mean(rs) if rs else -1e9,
     }
 
-# -------------------------------------------------
-# FILTER EVAL
-# -------------------------------------------------
 
 def _passes_filters_verbose(
-    metrics: Dict[str, float]
+    metrics: Dict[str, float],
+    filters: Dict[str, Any],
 ) -> Tuple[bool, List[str]]:
     reasons: List[str] = []
+    thresholds = (filters or {}).get("thresholds", {}) or {}
 
-    for metric, cfg in FILTERS.items():
+    for metric, cfg in thresholds.items():
         val = metrics.get(metric)
         if val is None:
             reasons.append(f"{metric}:missing")
             continue
-
         if "min" in cfg and val < cfg["min"]:
             reasons.append(f"{metric}<{cfg['min']}")
         if "max" in cfg and val > cfg["max"]:
             reasons.append(f"{metric}>{cfg['max']}")
 
+    if filters.get("reject_degenerate"):
+        if metrics.get("trades_min", 0.0) <= 0:
+            reasons.append("trades_min<=0")
+
     return (len(reasons) == 0), reasons
 
-=======
-=======
->>>>>>> Stashed changes
-    return (
-        trades >= RULES["min_trades_total_mean"]
-        and trades >= RULES["min_trades_total_min"]
-        and _metric(rec, "profit_factor") >= RULES["min_pf_mean"]
-        and _metric(rec, "winrate") >= RULES["min_winrate_mean"]
-        and abs(_metric(rec, "max_drawdown_r", 999)) <= RULES["max_dd_max"]
-        and _metric(rec, "expectancy") >= RULES["min_expectancy_mean"]
-        and _metric(rec, "robust_score") >= RULES["min_robust_mean"]
-    )
 
-<<<<<<< Updated upstream
->>>>>>> Stashed changes
-=======
->>>>>>> Stashed changes
 def promotion_score(scores: List[float]) -> float:
     if not scores:
         return -1e9
@@ -206,87 +137,66 @@ def promotion_score(scores: List[float]) -> float:
         + 0.25 * min(scores)
     )
 
-def parse_filename(path: str) -> Tuple[str, int]:
-    name = os.path.basename(path)
-    parts = name.replace(".json", "").split("_seed")
-    return parts[0].replace("robust_", ""), int(parts[1])
 
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-# -------------------------------------------------
-# MAIN
-# -------------------------------------------------
-=======
-=======
->>>>>>> Stashed changes
-# ===============================
-# MAIN
-# ===============================
->>>>>>> Stashed changes
+def build_arg_parser() -> argparse.ArgumentParser:
+    ap = argparse.ArgumentParser(description="Post-analysis robust promotion")
+    ap.add_argument("--root", default=".", help="Repo root for results/ and configs/")
+    ap.add_argument("--rules", default=None, help="Override promotion rules JSON")
+    return ap
+
 
 def main() -> None:
-    os.makedirs(OUT_DIR, exist_ok=True)
+    args = build_arg_parser().parse_args()
+    root = os.path.abspath(args.root)
 
-    files = glob.glob(os.path.join(ROBUST_DIR, "robust_*_seed*.json"))
-    if not files:
-        print("[POST] No robust files found.")
-        return
+    robust_dir = os.path.join(root, "results", "robust")
+    out_dir = os.path.join(root, "results", "promotions")
+    os.makedirs(out_dir, exist_ok=True)
 
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-    frozen_keys = phase_keys(PHASE)
+    rules_path = (
+        args.rules
+        or os.getenv("PIPELINE_RULES")
+        or os.path.join(root, "configs", "promotion_rules_A.json")
+    )
 
-    # window -> param_key -> seed -> record
+    rules = _load_rules(rules_path)
+    phase = str(rules.get("phase", "A")).upper()
+    filters = rules.get("filters", {}) or {}
+    promotion = rules.get("promotion", {}) or {}
+
+    min_seed_passes = int(promotion.get("min_seeds_passed", 1))
+    min_windows_passes = int(promotion.get("min_windows_passed", 1))
+    top_k_promoted = int(promotion.get("top_k", 50))
+
+    why_rejected_csv = os.path.join(
+        out_dir,
+        f"why_rejected_{os.path.basename(rules_path).replace('.json', '')}.csv",
+    )
+    write_rejections = bool((rules.get("audit", {}) or {}).get("write_why_rejected_csv", True))
+
+    files = glob.glob(os.path.join(robust_dir, "robust_*_seed*.json"))
+
+    frozen_keys = phase_keys(phase)
     bucket: Dict[str, Dict[str, Dict[int, Dict[str, Any]]]] = {}
-
-=======
-    bucket: Dict[str, Dict[str, Dict[int, Dict[str, Any]]]] = {}
-=======
-    bucket: Dict[str, Dict[str, Dict[int, Dict[str, Any]]]] = {}
->>>>>>> Stashed changes
-    frozen_keys_a = phase_keys("A")
-    skipped_non_a = 0
->>>>>>> Stashed changes
-    skipped_seed = 0
     skipped_phase = 0
-
-    # ---------------------------
-    # LOAD + BUCKET
-    # ---------------------------
 
     for fp in files:
         window, seed = parse_filename(fp)
-
-        if SEEDS is not None and seed not in SEEDS:
-            skipped_seed += 1
-            continue
 
         with open(fp, "r", encoding="utf-8") as f:
             data = json.load(f)
 
         if not isinstance(data, list):
-            continue
+            raise ValueError(f"Robust file is not a list: {fp}")
 
         for r in data:
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
             if not isinstance(r, dict):
                 continue
 
             meta = r.get("meta", {}) or {}
             ph = str(meta.get("pipeline_phase", "")).strip().upper()
-            if ph != PHASE:
+            if ph and ph != phase:
                 skipped_phase += 1
-=======
-            meta = r.get("meta", {}) or {}
-=======
-            meta = r.get("meta", {}) or {}
->>>>>>> Stashed changes
-            ph = str(meta.get("pipeline_phase", "")).upper()
-
-            if ph != "A":
-                skipped_non_a += 1
->>>>>>> Stashed changes
                 continue
 
             params = r.get("params")
@@ -295,10 +205,6 @@ def main() -> None:
 
             key = json.dumps(params, sort_keys=True)
             bucket.setdefault(window, {}).setdefault(key, {})[seed] = r
-
-    # ---------------------------
-    # EVALUATION
-    # ---------------------------
 
     promoted: Dict[str, Dict[str, Any]] = {}
     rejected_rows: List[List[Any]] = []
@@ -309,10 +215,8 @@ def main() -> None:
             scores: List[float] = []
 
             for seed, rec in seed_map.items():
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
                 metrics = normalize_metrics(rec)
-                ok, reasons = _passes_filters_verbose(metrics)
+                ok, reasons = _passes_filters_verbose(metrics, filters)
 
                 if ok:
                     passed_seeds.append(seed)
@@ -331,25 +235,13 @@ def main() -> None:
                         metrics["robust_score_mean"],
                     ])
 
-=======
-                if _passes_rules(rec):
-                    passed_seeds.append(seed)
-                    robust_scores.append(_metric(rec, "robust_score", -1e9))
-
->>>>>>> Stashed changes
-=======
-                if _passes_rules(rec):
-                    passed_seeds.append(seed)
-                    robust_scores.append(_metric(rec, "robust_score", -1e9))
-
->>>>>>> Stashed changes
-            if len(passed_seeds) >= MIN_SEED_PASSES:
+            if len(passed_seeds) >= min_seed_passes:
                 promoted.setdefault(key, {
                     "params": json.loads(key),
                     "windows": {},
                     "scores": [],
-                    f"phase{PHASE}_frozen_keys": frozen_keys,
-                    "phase": PHASE,
+                    f"phase{phase}_frozen_keys": frozen_keys,
+                    "phase": phase,
                 })
                 promoted[key]["windows"][window] = {
                     "seeds": sorted(set(passed_seeds)),
@@ -357,120 +249,55 @@ def main() -> None:
                 }
                 promoted[key]["scores"].extend(scores)
 
-    # ---------------------------
-    # WINDOW GATE + SCORE
-    # ---------------------------
-
     final: List[Dict[str, Any]] = []
     for p in promoted.values():
-        if len(p["windows"]) >= MIN_WINDOWS_PASSES:
+        if len(p["windows"]) >= min_windows_passes:
             p["promotion_score"] = promotion_score(p["scores"])
             final.append(p)
 
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
     final.sort(key=lambda x: float(x.get("promotion_score", -1e9)), reverse=True)
-    final = final[:TOP_K_PROMOTED]
+    final = final[:top_k_promoted]
 
-    # ---------------------------
-    # WRITE OUTPUTS
-    # ---------------------------
-
-    out_json = os.path.join(
-        OUT_DIR,
-        f"fase{PHASE}_promoted.json"
-    )
+    out_json = os.path.join(out_dir, f"fase{phase}_promoted.json")
     with open(out_json, "w", encoding="utf-8") as f:
-=======
-    final.sort(key=lambda x: x["promotion_score"], reverse=True)
-    final = final[:TOP_K_PROMOTED]
-
-    out = os.path.join(OUT_DIR, "faseA_promoted.json")
-    with open(out, "w", encoding="utf-8") as f:
->>>>>>> Stashed changes
-=======
-    final.sort(key=lambda x: x["promotion_score"], reverse=True)
-    final = final[:TOP_K_PROMOTED]
-
-    out = os.path.join(OUT_DIR, "faseA_promoted.json")
-    with open(out, "w", encoding="utf-8") as f:
->>>>>>> Stashed changes
         json.dump(final, f, indent=2, ensure_ascii=False)
 
-    # 👉 FIX CRÍTICO: writer SIEMPRE dentro del with
-    with open(WHY_REJECTED_CSV, "w", newline="", encoding="utf-8") as f:
-        writer = csv.writer(f)
-        writer.writerow([
-            "window",
-            "seed",
-            "params_key",
-            "failed_rules",
-            "trades",
-            "profit_factor",
-            "winrate",
-            "max_drawdown_r",
-            "expectancy",
-            "robust_score",
-        ])
-        if rejected_rows:
-            writer.writerows(rejected_rows)
-
-    # ---------------------------
-    # LOG
-    # ---------------------------
+    if write_rejections:
+        with open(why_rejected_csv, "w", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+            writer.writerow([
+                "window",
+                "seed",
+                "params_key",
+                "failed_rules",
+                "trades",
+                "profit_factor",
+                "winrate",
+                "max_drawdown_r",
+                "expectancy",
+                "robust_score",
+            ])
+            if rejected_rows:
+                writer.writerows(rejected_rows)
 
     print("=========================================")
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-    print(f"[POST] Phase {PHASE} promoted: {len(final)}")
+    print(f"[POST] Phase {phase} promoted: {len(final)}")
     print(f"[POST] Saved -> {out_json}")
-    print(f"[POST] Rejection audit -> {WHY_REJECTED_CSV}")
-    if skipped_seed:
-        print(f"[POST][INFO] Skipped {skipped_seed} files by SEEDS")
+    if write_rejections:
+        print(f"[POST] Rejection audit -> {why_rejected_csv}")
     if skipped_phase:
         print(f"[POST][WARN] Skipped {skipped_phase} records from other phases")
-=======
-    print(f"[POST] Promoted candidates: {len(final)}")
-    print(f"[POST] Saved -> {out}")
-    if skipped_seed:
-        print(f"[POST][INFO] Skipped {skipped_seed} files by SEEDS")
-    if skipped_non_a:
-        print(f"[POST][WARN] Skipped {skipped_non_a} non-A records")
->>>>>>> Stashed changes
-=======
-    print(f"[POST] Promoted candidates: {len(final)}")
-    print(f"[POST] Saved -> {out}")
-    if skipped_seed:
-        print(f"[POST][INFO] Skipped {skipped_seed} files by SEEDS")
-    if skipped_non_a:
-        print(f"[POST][WARN] Skipped {skipped_non_a} non-A records")
->>>>>>> Stashed changes
     print("=========================================")
 
     if not final:
-        print(f"[POST] No promotion. Pipeline should continue Phase {PHASE}.")
+        print(f"[POST] No promotion. Pipeline should continue Phase {phase}.")
     else:
-        print(f"[POST] Promotion SUCCESS. Ready for next phase.")
+        print("[POST] Promotion SUCCESS. Ready for next phase.")
 
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-# -------------------------------------------------
 
-=======
->>>>>>> Stashed changes
-=======
->>>>>>> Stashed changes
 if __name__ == "__main__":
-    main()
-
-
-
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-
-
-
-=======
->>>>>>> Stashed changes
-=======
->>>>>>> Stashed changes
+    try:
+        main()
+    except Exception as exc:
+        print(f"[POST][ERROR] {exc}", file=sys.stderr)
+        sys.exit(1)
