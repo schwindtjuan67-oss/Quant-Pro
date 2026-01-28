@@ -40937,3 +40937,86 @@ DATA=datasets\SOLUSDT\1m
 WINDOWS=2020-09_2020-12 2021-01_2021-12 2022-01_2023-06
 =====================================================
 [END] 28/01/2026  8:42:56,04
+=====================================================
+[BOOT] 28/01/2026  8:48:02,79
+ROOT=C:\Users\PC\Documents\GitHub\Quant-Pro
+DATA=datasets\SOLUSDT\1m
+WINDOWS=2020-09_2020-12 2021-01_2021-12 2022-01_2023-06
+=====================================================
+[CYCLE] seed_base=6019 seeds=6019 6020 6021
+[ROBUST] window=2020-09_2020-12 seed=6019 out=results\robust\robust_2020-09_2020-12_seed6019.json
+[ROBUST] loading dataset...
+[ROBUST] date_from=2020-09-01 date_to=2020-12-31 window='2020-09_2020-12'
+[ROBUST][DATA] input=datasets\SOLUSDT\1m interval=1m interval_dir=- found_csv=65 found_pkl=0 selected_kind=csv selected_files=65
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2020-08.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2020-09.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2020-10.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2020-11.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2020-12.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2021-01.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2021-02.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2021-03.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2021-04.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2021-05.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2021-06.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2021-07.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2021-08.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2021-09.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2021-10.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2021-11.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2021-12.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2022-01.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2022-02.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2022-03.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2022-04.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2022-05.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2022-06.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2022-07.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2022-08.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2022-09.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2022-10.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2022-11.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2022-12.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2023-01.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2023-02.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2023-03.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2023-04.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2023-05.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2023-06.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2023-07.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2023-08.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2023-09.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2023-10.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2023-11.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2023-12.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2024-01.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2024-02.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2024-03.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2024-04.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2024-05.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2024-06.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2024-07.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2024-08.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2024-09.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2024-10.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2024-11.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2024-12.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2025-01.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2025-02.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2025-03.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2025-04.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2025-05.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2025-06.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2025-07.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2025-08.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2025-09.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2025-10.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2025-11.csv
+[ROBUST][DATA] selected: datasets\SOLUSDT\1m\SOLUSDT_1m_2025-12.csv
+[ROBUST][DATA] candles_range=2020-09-01T00:00:00+00:00 -> 2020-12-30T23:59:00+00:00
+[ROBUST] data size = 173872
+[ROBUST] Using REAL backtest function (in-memory).
+[ROBUST] Parallel enabled: workers=2 (spawn-safe) batch_size=32
+[ROBUST][HB] done=32/287 passed=0 failed=32 elapsed=00:00:41 rate=0.78 params/s window=2020-09_2020-12 seed=6019 top_fails: fold 0: min_trades (1)=32, fold 1: min_trades (1)=32, fold 2: min_trades (1)=32
+[ROBUST][HB] done=96/287 passed=0 failed=96 elapsed=00:01:20 rate=1.20 params/s window=2020-09_2020-12 seed=6019 top_fails: fold 0: min_trades (1)=96, fold 1: min_trades (1)=96, fold 2: min_trades (1)=96
+[ROBUST][HB] done=160/287 passed=0 failed=160 elapsed=00:01:59 rate=1.33 params/s window=2020-09_2020-12 seed=6019 top_fails: fold 0: min_trades (1)=160, fold 1: min_trades (1)=160, fold 2: min_trades (1)=160

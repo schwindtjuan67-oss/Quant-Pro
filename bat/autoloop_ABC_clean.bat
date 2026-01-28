@@ -1,4 +1,4 @@
-﻿@echo off
+@echo off
 setlocal ENABLEDELAYEDEXPANSION
 
 REM =====================================================
@@ -160,7 +160,7 @@ echo [CYCLE] seed_base=%SEED_BASE% seeds=%SEEDS%
 >>"%LOG_FILE%" echo [CYCLE] seed_base=%SEED_BASE% seeds=%SEEDS%
 
 REM =========================
-REM FASE A â€” ROBUST
+REM FASE A Ã¢â‚¬â€ ROBUST
 REM =========================
 set "PIPELINE_PHASE=A"
 set "PIPELINE_DISABLE_GPU=0"
@@ -189,7 +189,7 @@ for %%W in (%WINDOWS%) do (
 set "PIPELINE_DISABLE_GPU=0"
 
 REM =========================
-REM POST A â€” ÃšNICO PROMOTOR Aâ†’B
+REM POST A Ã¢â‚¬â€ ÃƒÅ¡NICO PROMOTOR AÃ¢â€ â€™B
 REM =========================
 %PYTHON% -m analysis.analysis_post_robust >>"%LOG_FILE%" 2>&1
 
@@ -225,7 +225,7 @@ if %HC_RC% GEQ 2 (
 )
 
 REM =========================
-REM STAGE B â€” RISK CALIBRATION
+REM STAGE B Ã¢â‚¬â€ RISK CALIBRATION
 REM =========================
 %PYTHON% -m analysis.stage_b_risk_calibration ^
   --data "%DATA%" ^
@@ -267,7 +267,7 @@ if %HC_RC% GEQ 2 (
 )
 
 REM =========================
-REM STAGE C â€” SUPERVIVENCIA REAL
+REM STAGE C Ã¢â‚¬â€ SUPERVIVENCIA REAL
 REM =========================
 set PIPELINE_MIN_TRADES=400
 set PIPELINE_MIN_R_OBS=300
