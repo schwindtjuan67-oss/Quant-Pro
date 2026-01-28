@@ -28,7 +28,7 @@ set "PYTHONPATH=%ROOT%"
 set "PYTHONIOENCODING=utf-8"
 set "PYTHONUNBUFFERED=1"
 set "RUN_MODE=PIPELINE"
-REM Desactivar SOFT_MAX_TRADES en modo PIPELINE para no recortar risk_mult en research/backtest
+REM PIPELINE: deshabilita SOFT_MAX_TRADES para no sesgar el research/backtest
 set "PIPELINE_DISABLE_SOFT_MAX_TRADES=1"
 set "PIPELINE_DISABLE_TRADE_LOG=1"
 set "PIPELINE_VERBOSE_DIAGNOSTICS=0"
