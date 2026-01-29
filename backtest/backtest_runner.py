@@ -253,6 +253,12 @@ class BacktestRunner:
             def _apply_param_overrides(self, strategy: Any, params: Dict[str, Any]) -> None:
                 if not isinstance(params, dict):
                     return
+                if hasattr(strategy, "apply_param_overrides"):
+                    try:
+                        strategy.apply_param_overrides(params)
+                        return
+                    except Exception:
+                        pass
                 # Map snake_case params into uppercase attrs when the Hybrid expects constants.
                 # This keeps backward compatibility when __init__ doesn't expose them.
                 mapping = {

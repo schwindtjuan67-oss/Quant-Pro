@@ -343,6 +343,25 @@ def _stable_params_key(params: Dict[str, Any]) -> str:
         return str(params)
 
 
+_SANITY_TRADE_COUNTS: Dict[str, int] = {}
+
+
+def _sanity_check_trade_counts(params_key: str, trades: int) -> None:
+    if not params_key:
+        return
+    if params_key in _SANITY_TRADE_COUNTS:
+        return
+    for other_key, other_trades in _SANITY_TRADE_COUNTS.items():
+        if other_trades == trades:
+            if _is_verbose_pipeline():
+                print(
+                    "[BACKTEST][SANITY] params_key changed but trades count stayed the same: "
+                    f"{trades} (prev_key={other_key} new_key={params_key})"
+                )
+            break
+    _SANITY_TRADE_COUNTS[params_key] = trades
+
+
 def _adapter_override_diagnostics(params: Dict[str, Any]) -> Tuple[List[str], List[str]]:
     try:
         from Live.hybrid_scalper_pro import HybridScalperPRO
@@ -434,6 +453,12 @@ def run_backtest_on_candles(
             "[BACKTEST][INMEM] Missing base config. Provide config dict or base_config/config_path (json path)."
         )
 
+    if _is_verbose_pipeline():
+        print(
+            "[BACKTEST][DIAG] received_strategy_params=",
+            json.dumps(strategy_params or {}, ensure_ascii=False, sort_keys=True),
+        )
+
     # Symbol
     sym = (symbol or cfg.get("symbol") or (cfg.get("symbols") or ["SOLUSDT"])[0]).upper()
 
@@ -493,6 +518,8 @@ def run_backtest_on_candles(
         # Algunos runners devuelven "trades" como int y escriben CSV afuera;
         # en modo in-memory no asumimos filesystem => devolvemos [] para no romper.
         trades_list = []
+
+    _sanity_check_trade_counts(_stable_params_key(merged_kwargs), len(trades_list))
 
     if compute_metrics:
         try:
@@ -666,6 +693,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
 
