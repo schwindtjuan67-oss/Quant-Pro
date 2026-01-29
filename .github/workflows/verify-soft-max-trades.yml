@@ -21,7 +21,10 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          if [ -f requirements.txt ]; then pip install -r requirements.txt || echo "::warning::requirements.txt install failed; continuing"; fi
+          if [ -f requirements-dev.txt ]; then pip install -r requirements-dev.txt || echo "::warning::requirements-dev.txt install failed; continuing"; fi
+          if [ -f requirements-base.txt ]; then pip install -r requirements-base.txt || echo "::warning::requirements-base.txt install failed; continuing"; fi
+          if [ -f pyproject.toml ]; then pip install . || echo "::warning::pyproject.toml install failed; continuing"; fi
       - name: Run soft max trades verification
         env:
           PYTHONPATH: .
