@@ -503,6 +503,108 @@ class HybridScalperPRO:
         self.last_regime: Optional[str] = None
         self.last_regime_ts: int = 0
 
+    def apply_param_overrides(self, params: Dict[str, Any]) -> List[str]:
+        if not isinstance(params, dict):
+            return []
+
+        applied_keys: List[str] = []
+
+        def _set_attr(attr: str, value: Any, cast=None) -> None:
+            try:
+                val = cast(value) if cast else value
+                setattr(self, attr, val)
+            except Exception:
+                pass
+
+        def _mark(key: str) -> None:
+            if key not in applied_keys:
+                applied_keys.append(key)
+
+        def _set_cooldowns(value: Any) -> None:
+            try:
+                val = float(value)
+            except Exception:
+                return
+            for attr in ("cooldown_after_loss_sec", "cooldown_after_win_sec", "reentry_block_sec"):
+                _set_attr(attr, val)
+
+        atr_updated = False
+
+        if "ema_fast" in params:
+            _set_attr("EMA_FAST", params["ema_fast"], cast=int)
+            _mark("ema_fast")
+        if "ema_slow" in params:
+            _set_attr("EMA_SLOW", params["ema_slow"], cast=int)
+            _mark("ema_slow")
+        if "atr_len" in params:
+            _set_attr("ATR_N", params["atr_len"], cast=int)
+            atr_updated = True
+            _mark("atr_len")
+        if "atr_n" in params:
+            _set_attr("ATR_N", params["atr_n"], cast=int)
+            atr_updated = True
+            _mark("atr_n")
+        if "atr_stop_mult" in params:
+            _set_attr("ATR_STOP_MULT", params["atr_stop_mult"], cast=float)
+            _mark("atr_stop_mult")
+        if "sl_atr_mult" in params:
+            _set_attr("ATR_STOP_MULT", params["sl_atr_mult"], cast=float)
+            _set_attr("RANGE_STOP_ATR_MULT", params["sl_atr_mult"], cast=float)
+            _mark("sl_atr_mult")
+        if "atr_trail_mult" in params:
+            _set_attr("ATR_TRAIL_MULT", params["atr_trail_mult"], cast=float)
+            _mark("atr_trail_mult")
+        if "tp_atr_mult" in params:
+            _set_attr("ATR_TRAIL_MULT", params["tp_atr_mult"], cast=float)
+            _set_attr("RANGE_TP_TO_VWAP_ATR", params["tp_atr_mult"], cast=float)
+            _mark("tp_atr_mult")
+        if "cooldown_sec" in params:
+            _set_cooldowns(params["cooldown_sec"])
+            _mark("cooldown_sec")
+        if "cooldown_after_loss_sec" in params:
+            _set_attr("cooldown_after_loss_sec", params["cooldown_after_loss_sec"], cast=float)
+            _mark("cooldown_after_loss_sec")
+        if "cooldown_after_win_sec" in params:
+            _set_attr("cooldown_after_win_sec", params["cooldown_after_win_sec"], cast=float)
+            _mark("cooldown_after_win_sec")
+        if "reentry_block_sec" in params:
+            _set_attr("reentry_block_sec", params["reentry_block_sec"], cast=float)
+            _mark("reentry_block_sec")
+
+        if "risk_max_trades" in params:
+            try:
+                self.risk_manager.max_trades = int(params["risk_max_trades"])
+                _mark("risk_max_trades")
+            except Exception:
+                pass
+        if "max_trades_day" in params:
+            try:
+                self.risk_manager.max_trades = int(params["max_trades_day"])
+                _mark("max_trades_day")
+            except Exception:
+                pass
+        if "risk_max_loss_pct" in params:
+            try:
+                self.risk_manager.max_loss_pct = float(params["risk_max_loss_pct"])
+                _mark("risk_max_loss_pct")
+            except Exception:
+                pass
+        if "risk_max_dd_pct" in params:
+            try:
+                self.risk_manager.max_dd_pct = float(params["risk_max_dd_pct"])
+                _mark("risk_max_dd_pct")
+            except Exception:
+                pass
+
+        if atr_updated and getattr(self, "gpu", None) is not None:
+            try:
+                if hasattr(self.gpu, "atr_n"):
+                    self.gpu.atr_n = int(self.ATR_N)
+            except Exception:
+                pass
+
+        return applied_keys
+
     # ============================================================
     # FASE 7.2 — Helpers (NO destructivos)
     # ============================================================

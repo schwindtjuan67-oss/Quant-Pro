@@ -115,6 +115,8 @@ class HybridAdapterShadow:
         self.logger = logger
 
         raw_kwargs = self._resolve_strategy_kwargs_from_engine()
+        if os.getenv("PIPELINE_VERBOSE_DIAGNOSTICS", "").strip() in ("1", "true", "TRUE", "yes", "YES", "on", "ON"):
+            print("[ADAPTER][DIAG] received_strategy_params=", json.dumps(raw_kwargs, ensure_ascii=False, sort_keys=True))
         expanded_kwargs = self._expand_strategy_kwargs(raw_kwargs)
         init_kwargs, _extras = self._split_init_kwargs(expanded_kwargs)
 
@@ -146,18 +148,19 @@ class HybridAdapterShadow:
         cfg = getattr(self.engine, "config", None)
         if not isinstance(cfg, dict):
             return {}
+        merged: Dict[str, Any] = {}
         strategy = cfg.get("strategy")
         if isinstance(strategy, dict) and isinstance(strategy.get("kwargs"), dict):
-            return strategy.get("kwargs") or {}
+            merged.update(strategy.get("kwargs") or {})
         if isinstance(cfg.get("strategy_kwargs"), dict):
-            return cfg.get("strategy_kwargs") or {}
+            merged.update(cfg.get("strategy_kwargs") or {})
         if isinstance(cfg.get("params"), dict):
-            return cfg.get("params") or {}
+            merged.update(cfg.get("params") or {})
         if isinstance(cfg.get("strategy_params"), dict):
-            return cfg.get("strategy_params") or {}
+            merged.update(cfg.get("strategy_params") or {})
         if isinstance(strategy, dict) and isinstance(strategy.get("params"), dict):
-            return strategy.get("params") or {}
-        return {}
+            merged.update(strategy.get("params") or {})
+        return merged
 
     def _expand_strategy_kwargs(self, kwargs: Dict[str, Any]) -> Dict[str, Any]:
         mapping = {
@@ -184,8 +187,14 @@ class HybridAdapterShadow:
         return init_kwargs, extra_kwargs
 
     def _apply_pipeline_overrides(self, kwargs: Dict[str, Any]) -> None:
-        applied = []
+        applied = set()
         skipped = []
+        applied_keys = set()
+        if hasattr(self.hybrid, "apply_param_overrides"):
+            try:
+                applied_keys.update(self.hybrid.apply_param_overrides(kwargs or {}))
+            except Exception:
+                pass
         mapping = {
             # Map snake_case params into uppercase attrs when HybridScalperPRO stores constants.
             "ema_fast": ("EMA_FAST",),
@@ -196,11 +205,14 @@ class HybridAdapterShadow:
             "cooldown_sec": ("cooldown_after_loss_sec", "cooldown_after_win_sec", "reentry_block_sec"),
         }
         for k, v in (kwargs or {}).items():
+            if k in applied_keys:
+                applied.add(k)
+                continue
             applied_any = False
-            if hasattr(self.hybrid, k):
+            if k not in ("ema_fast", "ema_slow") and hasattr(self.hybrid, k):
                 try:
                     setattr(self.hybrid, k, v)
-                    applied.append(k)
+                    applied.add(k)
                     applied_any = True
                 except Exception:
                     pass
@@ -208,7 +220,7 @@ class HybridAdapterShadow:
             if hasattr(self.hybrid, upper):
                 try:
                     setattr(self.hybrid, upper, v)
-                    applied.append(upper)
+                    applied.add(k)
                     applied_any = True
                 except Exception:
                     pass
@@ -216,7 +228,7 @@ class HybridAdapterShadow:
                 if hasattr(self.hybrid, mapped):
                     try:
                         setattr(self.hybrid, mapped, v)
-                        applied.append(mapped)
+                        applied.add(k)
                         applied_any = True
                         break
                     except Exception:
@@ -228,7 +240,7 @@ class HybridAdapterShadow:
             init_kwargs, _extras = self._split_init_kwargs(kwargs)
             print("[ADAPTER][DIAG] strategy_kwargs=", json.dumps(kwargs, ensure_ascii=False, sort_keys=True))
             print("[ADAPTER][DIAG] init_kwargs=", json.dumps(init_kwargs, ensure_ascii=False, sort_keys=True))
-            print("[ADAPTER][DIAG] overrides_applied=", json.dumps(sorted(set(applied)), ensure_ascii=False))
+            print("[ADAPTER][DIAG] overrides_applied=", json.dumps(sorted(applied), ensure_ascii=False))
             print("[ADAPTER][DIAG] overrides_skipped=", json.dumps(sorted(set(skipped)), ensure_ascii=False))
 
     def _inject_params_meta(self) -> None:
@@ -279,7 +291,14 @@ class HybridAdapterShadow:
     # Helpers
     # -----------------------
     def _apply_params_to_hybrid(self, params: Dict[str, Any]) -> None:
+        if hasattr(self.hybrid, "apply_param_overrides"):
+            try:
+                self.hybrid.apply_param_overrides(params or {})
+            except Exception:
+                pass
         for k, v in (params or {}).items():
+            if k in ("ema_fast", "ema_slow"):
+                continue
             if hasattr(self.hybrid, k):
                 try:
                     setattr(self.hybrid, k, v)
