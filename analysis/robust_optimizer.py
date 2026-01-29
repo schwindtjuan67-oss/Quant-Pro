@@ -1755,6 +1755,63 @@ def _normalize_meta(meta: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     return payload
 
 
+def _normalize_data_path(path: str) -> str:
+    return os.path.normpath(os.path.expandvars(os.path.expanduser(path)))
+
+
+def _extract_data_candidates_from_config(base_cfg: Optional[Dict[str, Any]]) -> List[Tuple[str, str]]:
+    if not isinstance(base_cfg, dict):
+        return []
+    candidates: List[Tuple[str, str]] = []
+    for key in ("data_path", "data_dir", "data", "dataset", "dataset_path", "dataset_dir"):
+        if base_cfg.get(key):
+            candidates.append((key, str(base_cfg[key])))
+    paths = base_cfg.get("paths")
+    if isinstance(paths, dict):
+        for key in ("data", "dataset", "data_path", "data_dir"):
+            if paths.get(key):
+                candidates.append((f"paths.{key}", str(paths[key])))
+    return candidates
+
+
+def _resolve_data_path(
+    explicit: Optional[str],
+    base_cfg: Optional[Dict[str, Any]],
+    base_config_path: Optional[str],
+) -> Tuple[str, str]:
+    if explicit:
+        return _normalize_data_path(explicit), "cli"
+
+    candidates = _extract_data_candidates_from_config(base_cfg)
+    for label, value in candidates:
+        normalized = _normalize_data_path(value)
+        if os.path.exists(normalized):
+            return normalized, f"base_config:{label}"
+
+    symbol = None
+    interval = None
+    if isinstance(base_cfg, dict):
+        symbol = base_cfg.get("symbol")
+        interval = base_cfg.get("interval")
+    default_path = None
+    if symbol and interval:
+        default_path = _normalize_data_path(os.path.join("datasets", str(symbol), str(interval)))
+        if os.path.exists(default_path):
+            return default_path, "default"
+
+    looked = [p for _, p in candidates]
+    if default_path:
+        looked.append(default_path)
+    base_hint = f"base-config={base_config_path!r}." if base_config_path else "(no --base-config provided)."
+    _emit_windows_help_examples(
+        "[ROBUST][ERROR] Missing --data. Could not resolve a dataset path from base config or defaults."
+    )
+    raise SystemExit(
+        "[ROBUST] Missing --data. Could not resolve a dataset path from base config or defaults.\n"
+        f"{base_hint} Looked for: {', '.join(looked) if looked else '(none)'}."
+    )
+
+
 def _emit_windows_help_examples(message: str) -> None:
     print(message)
     print(
@@ -2179,7 +2236,11 @@ def _save_survivors(
 
 def main():
     ap = _ArgumentParser("robust_optimizer")
-    ap.add_argument("--data", required=True, help="dataset path (folder with CSVs)")
+    ap.add_argument(
+        "--data",
+        required=False,
+        help="dataset path (folder with CSVs). If omitted, derive from --base-config or default datasets/SYMBOL/INTERVAL.",
+    )
     ap.add_argument("--out", default=None, help="output json")
     ap.add_argument("--samples", type=int, default=200)
     ap.add_argument("--seed", type=int, default=1337)
@@ -2254,38 +2315,41 @@ def main():
             out_path = os.path.join("results", "robust", f"robust_{window_label}_seed{int(args.seed)}.json")
             os.makedirs(os.path.dirname(out_path), exist_ok=True)
 
-        print("[ROBUST] loading dataset...")
-        print(f"[ROBUST] date_from={date_from} date_to={date_to} window={args.window!r}")
-
-        data_spec = _discover_data_files(args.data, interval=args.interval)
-        data = load_candles_from_path(
-            args.data,
-            date_from=date_from,
-            date_to=date_to,
-            debug=bool(args.debug_loader),
-            interval=args.interval,
-            data_spec=data_spec,
-        )
-        print(f"[ROBUST] data size = {len(data)}")
-
-        if len(data) < int(args.min_candles):
-            print(f"[ROBUST][ERROR] Loaded {len(data)} candles (< min-candles={args.min_candles}).")
-            print("[ROBUST][ERROR] Revisá: ruta --data, CSVs, timestamps, o si el rango window está cubierto.")
-            raise SystemExit(2)
+        base_cfg = None
+        if args.base_config:
+            with open(args.base_config, "r", encoding="utf-8") as f:
+                base_cfg = json.load(f)
+            meta["base_config_path"] = args.base_config
 
         if args.use_dummy:
             print("[ROBUST][WARN] Using _dummy_backtest_fn => resultados NO representan performance real todavía.")
-            base_cfg = None
         else:
             if not args.base_config:
                 _emit_windows_help_examples(
                     "[ROBUST][ERROR] Missing --base-config (required for REAL in-memory backtest)."
                 )
                 raise SystemExit("[ROBUST] Missing --base-config (required for REAL in-memory backtest).")
-            with open(args.base_config, "r", encoding="utf-8") as f:
-                base_cfg = json.load(f)
             print("[ROBUST] Using REAL backtest function (in-memory).")
-            meta["base_config_path"] = args.base_config
+
+        print("[ROBUST] loading dataset...")
+        print(f"[ROBUST] date_from={date_from} date_to={date_to} window={args.window!r}")
+
+        data_path, data_source = _resolve_data_path(args.data, base_cfg, args.base_config)
+        data_spec = _discover_data_files(data_path, interval=args.interval)
+        data = load_candles_from_path(
+            data_path,
+            date_from=date_from,
+            date_to=date_to,
+            debug=bool(args.debug_loader),
+            interval=args.interval,
+            data_spec=data_spec,
+        )
+        print(f"[ROBUST] data size = {len(data)} (data_source={data_source})")
+
+        if len(data) < int(args.min_candles):
+            print(f"[ROBUST][ERROR] Loaded {len(data)} candles (< min-candles={args.min_candles}).")
+            print("[ROBUST][ERROR] Revisá: ruta --data, CSVs, timestamps, o si el rango window está cubierto.")
+            raise SystemExit(2)
 
         gates = _resolve_gates(
             base_cfg,
