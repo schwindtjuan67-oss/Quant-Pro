@@ -1070,6 +1070,47 @@ def _emit_verbose_diagnostics(
     print(f"  backtest_args={_diag_dump(args_payload)}", flush=True)
 
 
+def _signature_min_matches() -> int:
+    raw = os.getenv("PIPELINE_DIAG_SIGNATURE_MIN", "").strip()
+    try:
+        value = int(raw) if raw else 3
+    except Exception:
+        value = 3
+    return max(value, 2)
+
+
+def _signature_from_result(result: EvalResult) -> Tuple[int, float]:
+    total_trades = 0
+    total_equity = 0.0
+    for fr in result.fold_results:
+        total_trades += int(fr.metrics.get("trades", 0) or 0)
+        total_equity += float(fr.metrics.get("equity_r", 0.0) or 0.0)
+    return (total_trades, round(total_equity, 6))
+
+
+def _emit_identical_signature_warning(results: List[EvalResult]) -> None:
+    if not _diagnostics_enabled():
+        return
+    if len(results) < 2:
+        return
+    min_matches = _signature_min_matches()
+    signatures: Dict[Tuple[int, float], List[EvalResult]] = {}
+    for result in results:
+        signatures.setdefault(_signature_from_result(result), []).append(result)
+    for signature, group in signatures.items():
+        if len(group) < min_matches:
+            continue
+        params_keys = {json.dumps(item.params, sort_keys=True, ensure_ascii=False) for item in group}
+        if len(params_keys) <= 1:
+            continue
+        total_trades, total_equity = signature
+        print(
+            "[WARN] Params differ but backtest outputs identical signatures; strategy params might not be applied. "
+            f"(signature=trades:{total_trades}, equity_r:{total_equity}, matches={len(group)})",
+            flush=True,
+        )
+
+
 def _worker_init(
     data: List[Dict[str, Any]],
     base_cfg: Optional[Dict[str, Any]],
@@ -1455,6 +1496,7 @@ def run_robust_search(
             key=lambda r: (r.robust_score, r.agg.get("score_worst", -1e9), -r.agg.get("score_std", 1e9)),
             reverse=True,
         )
+        _emit_identical_signature_warning(results)
         debug_path = os.path.join("results", "debug", f"fails_{window_label}_seed{seed}.json")
         _atomic_write_json(debug_path, failed_samples)
         return results[:top_k], results
@@ -1702,6 +1744,7 @@ def run_robust_search(
         key=lambda r: (r.robust_score, r.agg.get("score_worst", -1e9), -r.agg.get("score_std", 1e9)),
         reverse=True,
     )
+    _emit_identical_signature_warning(results)
     debug_path = os.path.join("results", "debug", f"fails_{window_label}_seed{seed}.json")
     _atomic_write_json(debug_path, failed_samples)
     return results[:top_k], results
