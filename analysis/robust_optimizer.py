@@ -1793,11 +1793,11 @@ def _resolve_data_path(
     if isinstance(base_cfg, dict):
         symbol = base_cfg.get("symbol")
         interval = base_cfg.get("interval")
-    default_path = None
-    if symbol and interval:
-        default_path = _normalize_data_path(os.path.join("datasets", str(symbol), str(interval)))
-        if os.path.exists(default_path):
-            return default_path, "default"
+    default_symbol = str(symbol or "SOLUSDT")
+    default_interval = str(interval or "1m")
+    default_path = _normalize_data_path(os.path.join("datasets", default_symbol, default_interval))
+    if os.path.exists(default_path):
+        return default_path, "default"
 
     looked = [p for _, p in candidates]
     if default_path:
@@ -2239,7 +2239,7 @@ def main():
     ap.add_argument(
         "--data",
         required=False,
-        help="dataset path (folder with CSVs). If omitted, derive from --base-config or default datasets/SYMBOL/INTERVAL.",
+        help="dataset path (folder with CSVs). If omitted, derive from --base-config or default datasets/SOLUSDT/1m.",
     )
     ap.add_argument("--out", default=None, help="output json")
     ap.add_argument("--samples", type=int, default=200)
@@ -2334,17 +2334,23 @@ def main():
         print("[ROBUST] loading dataset...")
         print(f"[ROBUST] date_from={date_from} date_to={date_to} window={args.window!r}")
 
-        data_path, data_source = _resolve_data_path(args.data, base_cfg, args.base_config)
-        data_spec = _discover_data_files(data_path, interval=args.interval)
+        resolved_data_path, resolved_data_source = _resolve_data_path(args.data, base_cfg, args.base_config)
+        args.data = resolved_data_path
+        if _diagnostics_enabled():
+            print(
+                f"[ROBUST][DIAG] resolved_data={resolved_data_path} source={resolved_data_source}",
+                flush=True,
+            )
+        data_spec = _discover_data_files(resolved_data_path, interval=args.interval)
         data = load_candles_from_path(
-            data_path,
+            resolved_data_path,
             date_from=date_from,
             date_to=date_to,
             debug=bool(args.debug_loader),
             interval=args.interval,
             data_spec=data_spec,
         )
-        print(f"[ROBUST] data size = {len(data)} (data_source={data_source})")
+        print(f"[ROBUST] data size = {len(data)} (data_source={resolved_data_source})")
 
         if len(data) < int(args.min_candles):
             print(f"[ROBUST][ERROR] Loaded {len(data)} candles (< min-candles={args.min_candles}).")
