@@ -9,7 +9,11 @@ pandas
 numpy
 websockets
 aiohttp
-uvicorn[standard] fastapi
+uvicorn[standard]
+fastapi
 streamlit
-plotly streamlit pandas numpy
+plotly
+streamlit
+pandas
+numpy
 pyyaml
