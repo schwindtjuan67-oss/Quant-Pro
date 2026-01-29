@@ -1,10 +1,10 @@
+fastapi
+uvicorn
 python-dotenv
 numpy
 websocket-client
 requests
 python-binance
-fastapi
-uvicorn
 pandas
 numpy
 websockets
