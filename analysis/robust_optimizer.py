@@ -1755,6 +1755,23 @@ def _normalize_meta(meta: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     return payload
 
 
+def _emit_windows_help_examples(message: str) -> None:
+    print(message)
+    print(
+        "[ROBUST][HELP] Example: python -m analysis.robust_optimizer --data datasets/BTCUSDT "
+        "--window 2023-01_2023-03 --base-config configs/pipeline_research_backtest.json "
+        "--samples 2 --folds 2"
+    )
+    print("[ROBUST][HELP] If you're in PowerShell, run python commands as `python -c '...'` (not raw Python syntax).")
+
+
+class _ArgumentParser(argparse.ArgumentParser):
+    def error(self, message: str) -> None:
+        self.print_usage(sys.stderr)
+        _emit_windows_help_examples(f"[ROBUST][ERROR] {message}")
+        raise SystemExit(2)
+
+
 def _parse_env_int(name: str) -> Optional[int]:
     raw = os.getenv(name, "").strip()
     if not raw:
@@ -1762,6 +1779,7 @@ def _parse_env_int(name: str) -> Optional[int]:
     try:
         return int(raw)
     except Exception:
+        _emit_windows_help_examples(f"[ROBUST][ERROR] Invalid env {name}={raw!r} (expected int).")
         return None
 
 
@@ -1772,6 +1790,7 @@ def _parse_env_float(name: str) -> Optional[float]:
     try:
         return float(raw)
     except Exception:
+        _emit_windows_help_examples(f"[ROBUST][ERROR] Invalid env {name}={raw!r} (expected float).")
         return None
 
 
@@ -2159,7 +2178,7 @@ def _save_survivors(
 # ============================================================
 
 def main():
-    ap = argparse.ArgumentParser("robust_optimizer")
+    ap = _ArgumentParser("robust_optimizer")
     ap.add_argument("--data", required=True, help="dataset path (folder with CSVs)")
     ap.add_argument("--out", default=None, help="output json")
     ap.add_argument("--samples", type=int, default=200)
@@ -2221,6 +2240,9 @@ def main():
             date_from, date_to = window_to_dates(args.window)
 
         if not date_from or not date_to:
+            _emit_windows_help_examples(
+                "[ROBUST][ERROR] Missing date range. Provide --window OR (--from-date AND --to-date)."
+            )
             raise SystemExit("[ROBUST] Missing date range. Provide --window OR (--from-date AND --to-date).")
 
         window_label = args.window or f"{date_from[:7]}_{date_to[:7]}"
@@ -2256,6 +2278,9 @@ def main():
             base_cfg = None
         else:
             if not args.base_config:
+                _emit_windows_help_examples(
+                    "[ROBUST][ERROR] Missing --base-config (required for REAL in-memory backtest)."
+                )
                 raise SystemExit("[ROBUST] Missing --base-config (required for REAL in-memory backtest).")
             with open(args.base_config, "r", encoding="utf-8") as f:
                 base_cfg = json.load(f)
@@ -2278,6 +2303,8 @@ def main():
             try:
                 workers = int(envw) if envw else 0
             except Exception:
+                if envw:
+                    _emit_windows_help_examples(f"[ROBUST][ERROR] Invalid env ROBUST_WORKERS={envw!r} (expected int).")
                 workers = 0
         if workers <= 0 and (args.parallel or (os.getenv("ROBUST_PARALLEL", "").strip() in ("1", "true", "TRUE", "yes", "YES", "on", "ON"))):
             cpu = os.cpu_count() or 2
@@ -2291,6 +2318,7 @@ def main():
                 try:
                     batch_size = int(env_bs)
                 except Exception:
+                    _emit_windows_help_examples(f"[ROBUST][ERROR] Invalid env ROBUST_BATCH_SIZE={env_bs!r} (expected int).")
                     batch_size = 0
         if batch_size <= 0:
             batch_size = 8  # default recomendado

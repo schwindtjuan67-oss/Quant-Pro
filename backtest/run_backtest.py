@@ -7,6 +7,7 @@ import csv
 import glob
 import json
 import os
+import sys
 from datetime import datetime, timezone
 from typing import Dict, Any, Iterable, List, Optional, Tuple
 
@@ -28,6 +29,26 @@ else:
 # =====================================================
 def _parse_date_ymd(s: str) -> datetime:
     return datetime.strptime(s, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+
+
+def _emit_windows_help_examples(message: str) -> None:
+    print(message, file=sys.stderr)
+    print(
+        "[BACKTEST][HELP] Example: python -m backtest.run_backtest --config configs/pipeline_research_backtest.json "
+        "--data datasets/BTCUSDT --from 2023-01-01 --to 2023-02-01",
+        file=sys.stderr,
+    )
+    print(
+        "[BACKTEST][HELP] If you're in PowerShell, run python commands as `python -c '...'` (not raw Python syntax).",
+        file=sys.stderr,
+    )
+
+
+class _ArgumentParser(argparse.ArgumentParser):
+    def error(self, message: str) -> None:
+        self.print_usage(sys.stderr)
+        _emit_windows_help_examples(f"[BACKTEST][ERROR] {message}")
+        raise SystemExit(2)
 
 
 def _date_range_to_ms(
@@ -422,7 +443,7 @@ run_backtest_candles = run_backtest_on_candles
 # Main (CLI)
 # =====================================================
 def main():
-    ap = argparse.ArgumentParser("Quant Shadow Backtest Runner (1m CSVs)")
+    ap = _ArgumentParser("Quant Shadow Backtest Runner (1m CSVs)")
     ap.add_argument("--config", required=True)
     ap.add_argument("--data", required=True)
     ap.add_argument("--symbol", default=None)
@@ -567,7 +588,5 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
 
 
