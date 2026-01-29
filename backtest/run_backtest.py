@@ -309,6 +309,84 @@ def _apply_strategy_params(cfg: Dict[str, Any], patch: Dict[str, Any]) -> Dict[s
     return cfg2
 
 
+def _merge_strategy_kwargs(cfg: Dict[str, Any]) -> Dict[str, Any]:
+    merged: Dict[str, Any] = {}
+    if not isinstance(cfg, dict):
+        return merged
+    strategy = cfg.get("strategy")
+    if isinstance(strategy, dict) and isinstance(strategy.get("kwargs"), dict):
+        merged.update(strategy["kwargs"])
+    if isinstance(cfg.get("strategy_kwargs"), dict):
+        merged.update(cfg["strategy_kwargs"])
+    if isinstance(cfg.get("params"), dict):
+        merged.update(cfg["params"])
+    if isinstance(strategy, dict) and isinstance(strategy.get("params"), dict):
+        merged.update(strategy["params"])
+    if isinstance(cfg.get("strategy_params"), dict):
+        merged.update(cfg["strategy_params"])
+    return merged
+
+
+def _is_verbose_pipeline() -> bool:
+    return os.getenv("PIPELINE_VERBOSE_DIAGNOSTICS", "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    )
+
+
+def _stable_params_key(params: Dict[str, Any]) -> str:
+    try:
+        return json.dumps(params, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+    except Exception:
+        return str(params)
+
+
+def _adapter_override_diagnostics(params: Dict[str, Any]) -> Tuple[List[str], List[str]]:
+    try:
+        from Live.hybrid_scalper_pro import HybridScalperPRO
+    except Exception:
+        return [], sorted(params.keys())
+
+    try:
+        import inspect
+
+        accepted = {
+            k
+            for k in inspect.signature(HybridScalperPRO.__init__).parameters
+            if k != "self"
+        }
+    except Exception:
+        accepted = set()
+
+    mapping = {
+        "ema_fast": ("EMA_FAST",),
+        "ema_slow": ("EMA_SLOW",),
+        "atr_len": ("ATR_LEN", "ATR_N"),
+        "sl_atr_mult": ("ATR_STOP_MULT", "RANGE_STOP_ATR_MULT"),
+        "tp_atr_mult": ("ATR_TRAIL_MULT", "RANGE_TP_TO_VWAP_ATR"),
+        "cooldown_sec": ("cooldown_after_loss_sec", "cooldown_after_win_sec", "reentry_block_sec"),
+    }
+    applied: List[str] = []
+    skipped: List[str] = []
+    for key in (params or {}).keys():
+        applied_any = False
+        if key in accepted or hasattr(HybridScalperPRO, key):
+            applied_any = True
+        if hasattr(HybridScalperPRO, key.upper()):
+            applied_any = True
+        for mapped in mapping.get(key, ()):
+            if mapped in accepted or hasattr(HybridScalperPRO, mapped):
+                applied_any = True
+                break
+        if applied_any:
+            applied.append(key)
+        else:
+            skipped.append(key)
+    return sorted(set(applied)), sorted(set(skipped))
+
+
 # =====================================================
 # ✅ In-memory entrypoint (para robust_optimizer / optimizadores)
 # =====================================================
@@ -361,6 +439,27 @@ def run_backtest_on_candles(
 
     # Aplicar patch de params
     cfg2 = _apply_strategy_params(cfg, strategy_params)
+    merged_kwargs = _merge_strategy_kwargs(cfg2)
+    cfg2["strategy_kwargs"] = merged_kwargs
+    cfg2["params"] = dict(merged_kwargs)
+
+    strategy_cfg = cfg2.get("strategy")
+    if not isinstance(strategy_cfg, dict):
+        strategy_cfg = {}
+    else:
+        strategy_cfg = dict(strategy_cfg)
+    name = str(strategy_cfg.get("name") or "").strip().lower()
+    if name in ("hybrid_scalper_pro", "hybridscalperpro", "hybrid_scalper"):
+        strategy_cfg.pop("name", None)
+    strategy_cfg["kwargs"] = dict(merged_kwargs)
+    cfg2["strategy"] = strategy_cfg
+
+    if _is_verbose_pipeline():
+        applied, skipped = _adapter_override_diagnostics(merged_kwargs)
+        print("[BACKTEST][DIAG] merged_strategy_kwargs=", json.dumps(merged_kwargs, ensure_ascii=False, sort_keys=True))
+        print("[BACKTEST][DIAG] adapter_overrides_applied=", json.dumps(applied, ensure_ascii=False))
+        print("[BACKTEST][DIAG] adapter_overrides_skipped=", json.dumps(skipped, ensure_ascii=False))
+        print("[BACKTEST][DIAG] params_key=", _stable_params_key(merged_kwargs))
 
     # Normalizar candles (timestamp -> ms)
     candles2 = _normalize_candles_any_ts(candles)
@@ -567,7 +666,6 @@ def main():
 
 if __name__ == "__main__":
     main()
-
 
 
 
