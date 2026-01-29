@@ -2158,9 +2158,65 @@ def _save_survivors(
 # CLI runner
 # ============================================================
 
+def _normalize_data_path(path_value: Optional[str]) -> Optional[str]:
+    if not path_value:
+        return None
+    return os.path.normpath(os.path.expanduser(str(path_value).strip()))
+
+
+def _extract_data_candidates_from_config(base_cfg: Optional[Dict[str, Any]]) -> List[Tuple[str, str]]:
+    if not isinstance(base_cfg, dict):
+        return []
+    candidates: List[Tuple[str, str]] = []
+    direct_keys = ("data", "data_path", "data_dir", "dataset", "input_path")
+    for key in direct_keys:
+        value = base_cfg.get(key)
+        if isinstance(value, str) and value.strip():
+            candidates.append((key, value))
+    data_spec = base_cfg.get("data_spec")
+    if isinstance(data_spec, dict):
+        for key in ("input_path", "data_path", "data_dir", "path", "dataset"):
+            value = data_spec.get(key)
+            if isinstance(value, str) and value.strip():
+                candidates.append((f"data_spec.{key}", value))
+    return candidates
+
+
+def _resolve_data_path(
+    data_arg: Optional[str],
+    base_cfg: Optional[Dict[str, Any]],
+    base_config_path: Optional[str],
+) -> Tuple[str, str]:
+    explicit = _normalize_data_path(data_arg)
+    if explicit:
+        return explicit, "cli"
+
+    candidates = _extract_data_candidates_from_config(base_cfg)
+    for label, value in candidates:
+        normalized = _normalize_data_path(value)
+        if normalized:
+            return normalized, f"base_config:{label}"
+
+    default_path = _normalize_data_path(os.path.join("datasets", "SOLUSDT", "1m"))
+    if default_path and os.path.exists(default_path):
+        return default_path, "default"
+
+    looked = [label for label, _ in candidates]
+    looked += ["default:datasets/SOLUSDT/1m"]
+    base_hint = f" base-config={base_config_path!r}." if base_config_path else " (no --base-config provided)."
+    raise SystemExit(
+        "[ROBUST] Missing --data. Could not resolve a dataset path from base config or defaults."
+        f"{base_hint} Looked for: {', '.join(looked)}."
+    )
+
+
 def main():
     ap = argparse.ArgumentParser("robust_optimizer")
-    ap.add_argument("--data", required=True, help="dataset path (folder with CSVs)")
+    ap.add_argument(
+        "--data",
+        required=False,
+        help="dataset path (folder with CSVs). If omitted, derive from --base-config or default datasets/SOLUSDT/1m.",
+    )
     ap.add_argument("--out", default=None, help="output json")
     ap.add_argument("--samples", type=int, default=200)
     ap.add_argument("--seed", type=int, default=1337)
@@ -2215,6 +2271,10 @@ def main():
     }
 
     try:
+        base_cfg: Optional[Dict[str, Any]] = None
+        if args.base_config:
+            with open(args.base_config, "r", encoding="utf-8") as f:
+                base_cfg = json.load(f)
         date_from = args.from_date
         date_to = args.to_date
         if args.window:
@@ -2231,6 +2291,18 @@ def main():
         else:
             out_path = os.path.join("results", "robust", f"robust_{window_label}_seed{int(args.seed)}.json")
             os.makedirs(os.path.dirname(out_path), exist_ok=True)
+
+        resolved_data_path, resolved_data_source = _resolve_data_path(
+            args.data,
+            base_cfg,
+            args.base_config,
+        )
+        args.data = resolved_data_path
+        if _diagnostics_enabled():
+            print(
+                f"[ROBUST][DIAG] resolved_data={resolved_data_path} source={resolved_data_source}",
+                flush=True,
+            )
 
         print("[ROBUST] loading dataset...")
         print(f"[ROBUST] date_from={date_from} date_to={date_to} window={args.window!r}")
@@ -2253,12 +2325,9 @@ def main():
 
         if args.use_dummy:
             print("[ROBUST][WARN] Using _dummy_backtest_fn => resultados NO representan performance real todavía.")
-            base_cfg = None
         else:
             if not args.base_config:
                 raise SystemExit("[ROBUST] Missing --base-config (required for REAL in-memory backtest).")
-            with open(args.base_config, "r", encoding="utf-8") as f:
-                base_cfg = json.load(f)
             print("[ROBUST] Using REAL backtest function (in-memory).")
             meta["base_config_path"] = args.base_config
 
