@@ -27,7 +27,9 @@ def _expand_strategy_kwargs(kwargs: Dict[str, Any]) -> Dict[str, Any]:
         "atr_len": "atr_n",
         "sl_atr_mult": "atr_stop_mult",
         "tp_atr_mult": "atr_trail_mult",
+        "delta_roll_sec": "delta_rolling_sec",
         "max_trades_day": "risk_max_trades",
+        "max_trades_per_day": "max_trades_day",
         "cooldown_sec": "cooldown_after_loss_sec",
     }
     expanded = dict(kwargs)
@@ -154,6 +156,7 @@ class BacktestRunner:
                 self.symbol = outer.symbol
                 self.interval = outer.interval
                 self.config = outer.config
+                self._param_apply_logged = False
 
                 self.is_backtest = True
                 self.logger = BacktestLogger(self.symbol)
@@ -267,7 +270,9 @@ class BacktestRunner:
                     "rr_min",
                     "use_time_filter",
                     "max_trades_day",
+                    "max_trades_per_day",
                     "cooldown_sec",
+                    "delta_roll_sec",
                 }
                 # Map snake_case params into uppercase attrs when the Hybrid expects constants.
                 # This keeps backward compatibility when __init__ doesn't expose them.
@@ -277,7 +282,8 @@ class BacktestRunner:
                     "atr_len": ("ATR_LEN", "ATR_N"),
                     "sl_atr_mult": ("ATR_STOP_MULT", "RANGE_STOP_ATR_MULT"),
                     "tp_atr_mult": ("ATR_TRAIL_MULT", "RANGE_TP_TO_VWAP_ATR"),
-                    "cooldown_sec": ("cooldown_after_loss_sec", "cooldown_after_win_sec", "reentry_block_sec"),
+                    "cooldown_sec": ("COOLDOWN_SEC", "cooldown_after_loss_sec", "cooldown_after_win_sec", "reentry_block_sec"),
+                    "delta_roll_sec": ("DELTA_ROLLING_SEC", "delta_rolling_sec"),
                     "delta_rolling_sec": ("DELTA_ROLLING_SEC", "delta_rolling_sec"),
                     "delta_threshold": ("DELTA_THRESHOLD", "delta_threshold"),
                     "hour_start": ("HOUR_START", "hour_start"),
@@ -285,6 +291,7 @@ class BacktestRunner:
                     "use_time_filter": ("USE_TIME_FILTER", "use_time_filter"),
                     "rr_min": ("RR_MIN", "rr_min"),
                     "max_trades_day": ("max_trades_day", "risk_max_trades", "MAX_TRADES_DAY"),
+                    "max_trades_per_day": ("max_trades_day", "risk_max_trades", "MAX_TRADES_DAY"),
                 }
                 for key, value in params.items():
                     if key in force_set:
@@ -304,6 +311,63 @@ class BacktestRunner:
                             except Exception:
                                 pass
 
+            def _log_param_apply(self, strategy: Any, params: Dict[str, Any]) -> None:
+                if not PIPELINE_VERBOSE_DIAGNOSTICS or self._param_apply_logged:
+                    return
+                if not isinstance(params, dict):
+                    return
+                keys = (
+                    "delta_rolling_sec",
+                    "delta_threshold",
+                    "use_time_filter",
+                    "hour_start",
+                    "hour_end",
+                    "rr_min",
+                    "cooldown_sec",
+                    "max_trades_day",
+                )
+                attr_map = {
+                    "delta_rolling_sec": ("delta_rolling_sec", "DELTA_ROLLING_SEC"),
+                    "delta_threshold": ("delta_threshold", "DELTA_THRESHOLD"),
+                    "use_time_filter": ("use_time_filter", "USE_TIME_FILTER"),
+                    "hour_start": ("hour_start", "HOUR_START"),
+                    "hour_end": ("hour_end", "HOUR_END"),
+                    "rr_min": ("rr_min", "RR_MIN"),
+                    "cooldown_sec": (
+                        "cooldown_sec",
+                        "COOLDOWN_SEC",
+                        "cooldown_after_loss_sec",
+                        "cooldown_after_win_sec",
+                        "reentry_block_sec",
+                    ),
+                    "max_trades_day": ("max_trades_day", "MAX_TRADES_DAY"),
+                }
+                for key in keys:
+                    if key not in params:
+                        continue
+                    target = None
+                    value = None
+                    for attr in attr_map.get(key, ()):
+                        if hasattr(strategy, attr):
+                            target = attr
+                            try:
+                                value = getattr(strategy, attr)
+                            except Exception:
+                                value = None
+                            break
+                    if target is None and key == "max_trades_day":
+                        rm = getattr(strategy, "risk_manager", None)
+                        if rm is not None and hasattr(rm, "max_trades"):
+                            target = "risk_manager.max_trades"
+                            try:
+                                value = getattr(rm, "max_trades")
+                            except Exception:
+                                value = None
+                    if target is None:
+                        target = "<missing>"
+                    print(f"[PARAM-APPLY] {key} -> {target} = {value}")
+                self._param_apply_logged = True
+
             def _self_check_params(self, strategy: Any, expected: Dict[str, Any]) -> None:
                 if RUN_MODE not in PIPELINE_MODES:
                     return
@@ -317,14 +381,16 @@ class BacktestRunner:
                     "atr_len": ("ATR_N", "atr_n"),
                     "sl_atr_mult": ("ATR_STOP_MULT", "atr_stop_mult"),
                     "tp_atr_mult": ("ATR_TRAIL_MULT", "atr_trail_mult"),
-                    "max_trades_day": ("max_trades_day", "risk_max_trades"),
-                    "cooldown_sec": ("cooldown_after_loss_sec", "cooldown_after_win_sec", "reentry_block_sec"),
-                    "delta_rolling_sec": ("delta_rolling_sec",),
-                    "delta_threshold": ("delta_threshold",),
-                    "hour_start": ("hour_start",),
-                    "hour_end": ("hour_end",),
-                    "rr_min": ("rr_min",),
-                    "use_time_filter": ("use_time_filter",),
+                    "max_trades_day": ("max_trades_day", "risk_max_trades", "MAX_TRADES_DAY"),
+                    "max_trades_per_day": ("max_trades_day", "risk_max_trades", "MAX_TRADES_DAY"),
+                    "cooldown_sec": ("cooldown_sec", "COOLDOWN_SEC", "cooldown_after_loss_sec", "cooldown_after_win_sec", "reentry_block_sec"),
+                    "delta_roll_sec": ("delta_rolling_sec", "DELTA_ROLLING_SEC"),
+                    "delta_rolling_sec": ("delta_rolling_sec", "DELTA_ROLLING_SEC"),
+                    "delta_threshold": ("delta_threshold", "DELTA_THRESHOLD"),
+                    "hour_start": ("hour_start", "HOUR_START"),
+                    "hour_end": ("hour_end", "HOUR_END"),
+                    "rr_min": ("rr_min", "RR_MIN"),
+                    "use_time_filter": ("use_time_filter", "USE_TIME_FILTER"),
                 }
                 for key, attrs in checks.items():
                     if key not in expected:
@@ -335,7 +401,7 @@ class BacktestRunner:
                             target = attr
                             break
                     if not target:
-                        if key == "max_trades_day":
+                        if key in ("max_trades_day", "max_trades_per_day"):
                             try:
                                 rm = getattr(strategy, "risk_manager", None)
                                 if rm is not None and hasattr(rm, "max_trades"):
@@ -409,6 +475,7 @@ class BacktestRunner:
                         self._apply_param_overrides(strategy, kwargs)
                         self._apply_legacy_params(strategy)
                         self._self_check_params(strategy, kwargs)
+                        self._log_param_apply(strategy, kwargs)
                         return strategy, self._resolve_strategy_handler(strategy)
                     raise ValueError(f"BacktestRunner: unsupported strategy name {name!r}")
 
