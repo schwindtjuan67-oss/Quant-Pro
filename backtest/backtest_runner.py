@@ -259,6 +259,16 @@ class BacktestRunner:
                         return
                     except Exception:
                         pass
+                force_set = {
+                    "delta_rolling_sec",
+                    "delta_threshold",
+                    "hour_start",
+                    "hour_end",
+                    "rr_min",
+                    "use_time_filter",
+                    "max_trades_day",
+                    "cooldown_sec",
+                }
                 # Map snake_case params into uppercase attrs when the Hybrid expects constants.
                 # This keeps backward compatibility when __init__ doesn't expose them.
                 mapping = {
@@ -270,6 +280,11 @@ class BacktestRunner:
                     "cooldown_sec": ("cooldown_after_loss_sec", "cooldown_after_win_sec", "reentry_block_sec"),
                 }
                 for key, value in params.items():
+                    if key in force_set:
+                        try:
+                            setattr(strategy, key, value)
+                        except Exception:
+                            pass
                     if hasattr(strategy, key):
                         try:
                             setattr(strategy, key, value)
@@ -297,6 +312,12 @@ class BacktestRunner:
                     "tp_atr_mult": ("ATR_TRAIL_MULT", "atr_trail_mult"),
                     "max_trades_day": ("risk_max_trades",),
                     "cooldown_sec": ("cooldown_after_loss_sec", "cooldown_after_win_sec", "reentry_block_sec"),
+                    "delta_rolling_sec": ("delta_rolling_sec",),
+                    "delta_threshold": ("delta_threshold",),
+                    "hour_start": ("hour_start",),
+                    "hour_end": ("hour_end",),
+                    "rr_min": ("rr_min",),
+                    "use_time_filter": ("use_time_filter",),
                 }
                 for key, attrs in checks.items():
                     if key not in expected:
