@@ -137,6 +137,11 @@ class HybridAdapterShadow:
         if isinstance(active, dict) and active.get("params"):
             self._apply_params_to_hybrid(active["params"])
 
+        merged_params: Dict[str, Any] = dict(expanded_kwargs or {})
+        if isinstance(active, dict) and isinstance(active.get("params"), dict):
+            merged_params.update(active["params"])
+        self._log_param_apply(merged_params)
+
         self._inject_params_meta()
 
         self._hybrid_handler_fn = None
@@ -167,7 +172,9 @@ class HybridAdapterShadow:
             "atr_len": "atr_n",
             "sl_atr_mult": "atr_stop_mult",
             "tp_atr_mult": "atr_trail_mult",
+            "delta_roll_sec": "delta_rolling_sec",
             "max_trades_day": "risk_max_trades",
+            "max_trades_per_day": "max_trades_day",
             "cooldown_sec": "cooldown_after_loss_sec",
         }
         expanded = dict(kwargs or {})
@@ -202,7 +209,8 @@ class HybridAdapterShadow:
             "atr_len": ("ATR_LEN", "ATR_N"),
             "sl_atr_mult": ("ATR_STOP_MULT", "RANGE_STOP_ATR_MULT"),
             "tp_atr_mult": ("ATR_TRAIL_MULT", "RANGE_TP_TO_VWAP_ATR"),
-            "cooldown_sec": ("cooldown_after_loss_sec", "cooldown_after_win_sec", "reentry_block_sec"),
+            "cooldown_sec": ("COOLDOWN_SEC", "cooldown_after_loss_sec", "cooldown_after_win_sec", "reentry_block_sec"),
+            "delta_roll_sec": ("DELTA_ROLLING_SEC", "delta_rolling_sec"),
             "delta_rolling_sec": ("DELTA_ROLLING_SEC", "delta_rolling_sec"),
             "delta_threshold": ("DELTA_THRESHOLD", "delta_threshold"),
             "hour_start": ("HOUR_START", "hour_start"),
@@ -210,6 +218,7 @@ class HybridAdapterShadow:
             "use_time_filter": ("USE_TIME_FILTER", "use_time_filter"),
             "rr_min": ("RR_MIN", "rr_min"),
             "max_trades_day": ("max_trades_day", "risk_max_trades", "MAX_TRADES_DAY"),
+            "max_trades_per_day": ("max_trades_day", "risk_max_trades", "MAX_TRADES_DAY"),
         }
         for k, v in (kwargs or {}).items():
             if k in applied_keys:
@@ -249,6 +258,73 @@ class HybridAdapterShadow:
             print("[ADAPTER][DIAG] init_kwargs=", json.dumps(init_kwargs, ensure_ascii=False, sort_keys=True))
             print("[ADAPTER][DIAG] overrides_applied=", json.dumps(sorted(applied), ensure_ascii=False))
             print("[ADAPTER][DIAG] overrides_skipped=", json.dumps(sorted(set(skipped)), ensure_ascii=False))
+
+    def _log_param_apply(self, params: Dict[str, Any]) -> None:
+        if os.getenv("PIPELINE_VERBOSE_DIAGNOSTICS", "").strip() not in (
+            "1",
+            "true",
+            "TRUE",
+            "yes",
+            "YES",
+            "on",
+            "ON",
+        ):
+            return
+        if getattr(self, "_param_apply_logged", False):
+            return
+        if not isinstance(params, dict):
+            return
+        keys = (
+            "delta_rolling_sec",
+            "delta_threshold",
+            "use_time_filter",
+            "hour_start",
+            "hour_end",
+            "rr_min",
+            "cooldown_sec",
+            "max_trades_day",
+        )
+        attr_map = {
+            "delta_rolling_sec": ("delta_rolling_sec", "DELTA_ROLLING_SEC"),
+            "delta_threshold": ("delta_threshold", "DELTA_THRESHOLD"),
+            "use_time_filter": ("use_time_filter", "USE_TIME_FILTER"),
+            "hour_start": ("hour_start", "HOUR_START"),
+            "hour_end": ("hour_end", "HOUR_END"),
+            "rr_min": ("rr_min", "RR_MIN"),
+            "cooldown_sec": (
+                "cooldown_sec",
+                "COOLDOWN_SEC",
+                "cooldown_after_loss_sec",
+                "cooldown_after_win_sec",
+                "reentry_block_sec",
+            ),
+            "max_trades_day": ("max_trades_day", "MAX_TRADES_DAY"),
+        }
+        for key in keys:
+            if key not in params:
+                continue
+            target = None
+            value = None
+            for attr in attr_map.get(key, ()):
+                if hasattr(self.hybrid, attr):
+                    target = attr
+                    try:
+                        value = getattr(self.hybrid, attr)
+                    except Exception:
+                        value = None
+                    break
+            if target is None and key == "max_trades_day":
+                rm = getattr(self.hybrid, "risk_manager", None)
+                if rm is not None and hasattr(rm, "max_trades"):
+                    target = "risk_manager.max_trades"
+                    try:
+                        value = getattr(rm, "max_trades")
+                    except Exception:
+                        value = None
+            if target is None:
+                target = "<missing>"
+            print(f"[PARAM-APPLY] {key} -> {target} = {value}")
+        self._param_apply_logged = True
 
     def _inject_params_meta(self) -> None:
         if not self.logger or not hasattr(self.logger, "set_pending_meta"):
@@ -303,6 +379,23 @@ class HybridAdapterShadow:
                 self.hybrid.apply_param_overrides(params or {})
             except Exception:
                 pass
+        mapping = {
+            "ema_fast": ("EMA_FAST",),
+            "ema_slow": ("EMA_SLOW",),
+            "atr_len": ("ATR_LEN", "ATR_N"),
+            "sl_atr_mult": ("ATR_STOP_MULT", "RANGE_STOP_ATR_MULT"),
+            "tp_atr_mult": ("ATR_TRAIL_MULT", "RANGE_TP_TO_VWAP_ATR"),
+            "cooldown_sec": ("COOLDOWN_SEC", "cooldown_after_loss_sec", "cooldown_after_win_sec", "reentry_block_sec"),
+            "delta_roll_sec": ("DELTA_ROLLING_SEC", "delta_rolling_sec"),
+            "delta_rolling_sec": ("DELTA_ROLLING_SEC", "delta_rolling_sec"),
+            "delta_threshold": ("DELTA_THRESHOLD", "delta_threshold"),
+            "hour_start": ("HOUR_START", "hour_start"),
+            "hour_end": ("HOUR_END", "hour_end"),
+            "use_time_filter": ("USE_TIME_FILTER", "use_time_filter"),
+            "rr_min": ("RR_MIN", "rr_min"),
+            "max_trades_day": ("max_trades_day", "risk_max_trades", "MAX_TRADES_DAY"),
+            "max_trades_per_day": ("max_trades_day", "risk_max_trades", "MAX_TRADES_DAY"),
+        }
         for k, v in (params or {}).items():
             if k in ("ema_fast", "ema_slow"):
                 continue
@@ -318,3 +411,10 @@ class HybridAdapterShadow:
                     setattr(self.hybrid, upper, v)
                 except Exception:
                     pass
+            for mapped in mapping.get(k, ()):
+                if hasattr(self.hybrid, mapped):
+                    try:
+                        setattr(self.hybrid, mapped, v)
+                        break
+                    except Exception:
+                        pass
