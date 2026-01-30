@@ -240,6 +240,18 @@ class HybridScalperPRO:
     # -------------------------------
     CONSERVATIVE_SCORE_BONUS = 0  # +2 es “institucional”: baja trades, sube selectividad
 
+    # -------------------------------
+    # FREQUENCY knobs (pipeline/backtest overrides)
+    # -------------------------------
+    DELTA_ROLLING_SEC = 60
+    DELTA_THRESHOLD = 0.0
+    USE_TIME_FILTER = False
+    HOUR_START = 0
+    HOUR_END = 24
+    RR_MIN = 0.0
+    COOLDOWN_SEC = 0.0
+    MAX_TRADES_DAY = 0
+
     def __init__(
         self,
         symbol: str,
@@ -269,15 +281,26 @@ class HybridScalperPRO:
             "trend_ok": 0,
             "vwap_ok": 0,
             "delta_ok": 0,
+            "time_ok": 0,
+            "time_block": 0,
             "score_ok": 0,
             "risk_ok": 0,
             "all_ok": 0,
+            "rr_block": 0,
+            "cooldown_block": 0,
+            "max_trades_block": 0,
         }
 
         # ### BEGIN PATCH 2: FREQUENCY STATE (anti-churn) ###
+        self.cooldown_sec = float(getattr(self, "cooldown_sec", getattr(self, "COOLDOWN_SEC", 0.0)))
         self.cooldown_after_loss_sec = float(getattr(self, "cooldown_after_loss_sec", 45))
-        self.cooldown_after_win_sec  = float(getattr(self, "cooldown_after_win_sec", 0))
-        self.reentry_block_sec       = float(getattr(self, "reentry_block_sec", 60))
+        self.cooldown_after_win_sec = float(getattr(self, "cooldown_after_win_sec", 0))
+        self.reentry_block_sec = float(getattr(self, "reentry_block_sec", 60))
+
+        if self.cooldown_sec and self.cooldown_sec > 0:
+            self.cooldown_after_loss_sec = float(self.cooldown_sec)
+            self.cooldown_after_win_sec = float(self.cooldown_sec)
+            self.reentry_block_sec = float(self.cooldown_sec)
 
         self.next_entry_allowed_ts = 0.0
         self.last_exit_ts = 0
@@ -309,6 +332,23 @@ class HybridScalperPRO:
         self.risk_manager.max_loss_pct = risk_max_loss_pct
         self.risk_manager.max_dd_pct = risk_max_dd_pct
         self.risk_manager.max_trades = risk_max_trades
+
+        self.delta_rolling_sec = int(getattr(self, "delta_rolling_sec", getattr(self, "DELTA_ROLLING_SEC", 60)))
+        self.delta_threshold = float(getattr(self, "delta_threshold", getattr(self, "DELTA_THRESHOLD", 0.0)))
+        self.use_time_filter = bool(getattr(self, "use_time_filter", getattr(self, "USE_TIME_FILTER", False)))
+        self.hour_start = int(getattr(self, "hour_start", getattr(self, "HOUR_START", 0)))
+        self.hour_end = int(getattr(self, "hour_end", getattr(self, "HOUR_END", 24)))
+        self.rr_min = float(getattr(self, "rr_min", getattr(self, "RR_MIN", 0.0)))
+        self.max_trades_day = int(
+            getattr(
+                self,
+                "max_trades_day",
+                getattr(self, "MAX_TRADES_DAY", getattr(self.risk_manager, "max_trades", self.RISK_MAX_TRADES)),
+            )
+        )
+
+        if self.max_trades_day and self.max_trades_day > 0:
+            self.risk_manager.max_trades = int(self.max_trades_day)
 
         self.position_side: Optional[str] = None
         self.position_qty: float = 0.0
@@ -559,6 +599,8 @@ class HybridScalperPRO:
             _set_attr("RANGE_TP_TO_VWAP_ATR", params["tp_atr_mult"], cast=float)
             _mark("tp_atr_mult")
         if "cooldown_sec" in params:
+            _set_attr("cooldown_sec", params["cooldown_sec"], cast=float)
+            _set_attr("COOLDOWN_SEC", params["cooldown_sec"], cast=float)
             _set_cooldowns(params["cooldown_sec"])
             _mark("cooldown_sec")
         if "cooldown_after_loss_sec" in params:
@@ -574,15 +616,42 @@ class HybridScalperPRO:
         if "risk_max_trades" in params:
             try:
                 self.risk_manager.max_trades = int(params["risk_max_trades"])
+                self.max_trades_day = int(self.risk_manager.max_trades)
                 _mark("risk_max_trades")
             except Exception:
                 pass
         if "max_trades_day" in params:
             try:
-                self.risk_manager.max_trades = int(params["max_trades_day"])
+                self.max_trades_day = int(params["max_trades_day"])
+                self.risk_manager.max_trades = int(self.max_trades_day)
+                _set_attr("MAX_TRADES_DAY", self.max_trades_day, cast=int)
                 _mark("max_trades_day")
             except Exception:
                 pass
+        if "delta_rolling_sec" in params:
+            _set_attr("delta_rolling_sec", params["delta_rolling_sec"], cast=int)
+            _set_attr("DELTA_ROLLING_SEC", params["delta_rolling_sec"], cast=int)
+            _mark("delta_rolling_sec")
+        if "delta_threshold" in params:
+            _set_attr("delta_threshold", params["delta_threshold"], cast=float)
+            _set_attr("DELTA_THRESHOLD", params["delta_threshold"], cast=float)
+            _mark("delta_threshold")
+        if "hour_start" in params:
+            _set_attr("hour_start", params["hour_start"], cast=int)
+            _set_attr("HOUR_START", params["hour_start"], cast=int)
+            _mark("hour_start")
+        if "hour_end" in params:
+            _set_attr("hour_end", params["hour_end"], cast=int)
+            _set_attr("HOUR_END", params["hour_end"], cast=int)
+            _mark("hour_end")
+        if "use_time_filter" in params:
+            _set_attr("use_time_filter", params["use_time_filter"], cast=bool)
+            _set_attr("USE_TIME_FILTER", params["use_time_filter"], cast=bool)
+            _mark("use_time_filter")
+        if "rr_min" in params:
+            _set_attr("rr_min", params["rr_min"], cast=float)
+            _set_attr("RR_MIN", params["rr_min"], cast=float)
+            _mark("rr_min")
         if "risk_max_loss_pct" in params:
             try:
                 self.risk_manager.max_loss_pct = float(params["risk_max_loss_pct"])
@@ -934,12 +1003,99 @@ class HybridScalperPRO:
     def _delta_allows_long(self, snap: Dict[str, Any]) -> bool:
         if self.delta_router is None:
             return True
+        if self._delta_threshold_active():
+            if not self._delta_has_enough_data(snap):
+                return True
+            delta_val = self._delta_value_for_window(snap)
+            return delta_val >= float(self.delta_threshold)
         return self.delta_router.allows_long(self.symbol, snap)
 
     def _delta_allows_short(self, snap: Dict[str, Any]) -> bool:
         if self.delta_router is None:
             return True
+        if self._delta_threshold_active():
+            if not self._delta_has_enough_data(snap):
+                return True
+            delta_val = self._delta_value_for_window(snap)
+            return delta_val <= -float(self.delta_threshold)
         return self.delta_router.allows_short(self.symbol, snap)
+
+    def _delta_threshold_active(self) -> bool:
+        try:
+            return float(self.delta_threshold) > 0
+        except Exception:
+            return False
+
+    def _delta_has_enough_data(self, snap: Dict[str, Any]) -> bool:
+        try:
+            min_trades = int(getattr(self.delta_router, "min_trades", 0))
+        except Exception:
+            min_trades = 0
+        try:
+            trades = int(snap.get("trades_count_window", 0))
+        except Exception:
+            trades = 0
+        return trades >= int(min_trades)
+
+    def _delta_value_for_window(self, snap: Dict[str, Any]) -> float:
+        try:
+            sec = int(self.delta_rolling_sec)
+        except Exception:
+            sec = 60
+        if sec <= 0:
+            sec = 60
+        key = f"delta_rolling_{sec}s"
+        if key in snap:
+            try:
+                return float(snap.get(key, 0.0))
+            except Exception:
+                return 0.0
+        if sec <= 15:
+            return float(snap.get("delta_rolling_15s", 0.0))
+        if sec >= 60:
+            return float(snap.get("delta_rolling_60s", 0.0))
+        base60 = float(snap.get("delta_rolling_60s", 0.0))
+        if base60 != 0.0:
+            return base60 * (float(sec) / 60.0)
+        base15 = float(snap.get("delta_rolling_15s", 0.0))
+        if base15 != 0.0:
+            return base15 * (float(sec) / 15.0)
+        return 0.0
+
+    def _time_filter_allows_entry(self, ts_ms: int) -> Tuple[bool, int, str]:
+        if not getattr(self, "use_time_filter", False):
+            return True, -1, "TIME_FILTER_OFF"
+        dt_local = self._to_local_dt(ts_ms)
+        hour = int(dt_local.hour)
+        try:
+            start = int(self.hour_start)
+        except Exception:
+            start = 0
+        try:
+            end = int(self.hour_end)
+        except Exception:
+            end = 24
+        if start == end:
+            return True, hour, "TIME_FILTER_ALL"
+        if start < end:
+            allowed = bool(start <= hour < end)
+        else:
+            allowed = bool(hour >= start or hour < end)
+        return allowed, hour, "TIME_FILTER_OK" if allowed else "TIME_FILTER_BLOCK"
+
+    def _estimate_rr(self, regime: str, price: float, sl_initial: float, atr_val: Optional[float]) -> Optional[float]:
+        if atr_val is None or atr_val <= 0:
+            return None
+        stop_dist = abs(float(price) - float(sl_initial))
+        if stop_dist <= 0:
+            return None
+        if str(regime).upper() == "RANGE":
+            reward = float(self.RANGE_TP_TO_VWAP_ATR) * float(atr_val)
+        else:
+            reward = float(self.ATR_TRAIL_MULT) * float(atr_val)
+        if reward <= 0:
+            return None
+        return float(reward / stop_dist)
 
     def _calc_vwap_simple(self, window: int) -> float:
         # ============================================================
@@ -1169,6 +1325,8 @@ class HybridScalperPRO:
 
         # Cooldown global (post-exit)
         if now_ts < float(self.next_entry_allowed_ts or 0.0):
+            if hasattr(self, "_entry_diag") and isinstance(self._entry_diag, dict):
+                self._entry_diag["cooldown_block"] = int(self._entry_diag.get("cooldown_block", 0)) + 1
             return
 
         # Bloqueo de re-entry en mismo contexto
@@ -1178,8 +1336,25 @@ class HybridScalperPRO:
             and self.last_exit_side == side
             and (now_ts - (self.last_exit_ts / 1000.0)) < float(self.reentry_block_sec)
         ):
+            if hasattr(self, "_entry_diag") and isinstance(self._entry_diag, dict):
+                self._entry_diag["cooldown_block"] = int(self._entry_diag.get("cooldown_block", 0)) + 1
             return
         ### END PATCH 3A ###
+
+        try:
+            max_trades_day = int(getattr(self, "max_trades_day", 0) or 0)
+        except Exception:
+            max_trades_day = 0
+        if max_trades_day > 0:
+            try:
+                trades_today = int(getattr(self.risk_manager, "trades_today", 0))
+            except Exception:
+                trades_today = 0
+            if trades_today >= max_trades_day:
+                if hasattr(self, "_entry_diag") and isinstance(self._entry_diag, dict):
+                    self._entry_diag["max_trades_block"] = int(self._entry_diag.get("max_trades_block", 0)) + 1
+                self._p(f"[HYBRID] Max trades/day alcanzado ({trades_today}/{max_trades_day}).")
+                return
 
         if not self.risk_manager.can_trade():
             self._p("[HYBRID] RiskManager bloquea nuevas entradas (max loss / DD / trades).")
@@ -1224,6 +1399,14 @@ class HybridScalperPRO:
         fee_rate = float(self.fee_rate_est)
         fee_est_entry = float(fee_rate * (price * qty))
         fee_est_total = float(fee_rate * (price * qty) * 2.0)
+
+        rr_est = self._estimate_rr(regime=regime, price=price, sl_initial=sl_initial, atr_val=self.atr)
+        rr_min = float(getattr(self, "rr_min", 0.0) or 0.0)
+        if rr_min > 0 and rr_est is not None and rr_est < rr_min:
+            if hasattr(self, "_entry_diag") and isinstance(self._entry_diag, dict):
+                self._entry_diag["rr_block"] = int(self._entry_diag.get("rr_block", 0)) + 1
+            self._p(f"[HYBRID] RR insuficiente (rr={rr_est:.2f} < rr_min={rr_min:.2f}), skip entry.")
+            return
 
         self._p(f"[HYBRID] ENTRY {side} @ {price:.4f} qty={qty:.4f} SL={sl_initial:.4f} | regime={regime} reason={reason} | VOL_T={base_vol_t:.4f}")
 
@@ -1445,7 +1628,20 @@ class HybridScalperPRO:
             return
         try:
             print("\nENTRY DIAGNOSTICS")
-            for k in ["candles", "trend_ok", "vwap_ok", "delta_ok", "score_ok", "risk_ok", "all_ok"]:
+            for k in [
+                "candles",
+                "trend_ok",
+                "vwap_ok",
+                "delta_ok",
+                "time_ok",
+                "time_block",
+                "score_ok",
+                "risk_ok",
+                "all_ok",
+                "rr_block",
+                "cooldown_block",
+                "max_trades_block",
+            ]:
                 print(f"{k:12}: {int(d.get(k, 0))}")
             print()
         except Exception:
@@ -1658,14 +1854,26 @@ class HybridScalperPRO:
                 min(effective_vol_target, float(self.VOL_TARGET) * float(self.META_VOL_MULT_MAX)),
             )
 
-        # 7) HOURLY GATING
+        # 7) TIME FILTER
+        if regime in ("TREND", "RANGE") and getattr(self, "use_time_filter", False):
+            allowed, hour_local, why = self._time_filter_allows_entry(ts_ms=ts)
+            if hasattr(self, "_entry_diag") and isinstance(self._entry_diag, dict):
+                if allowed:
+                    self._entry_diag["time_ok"] = int(self._entry_diag.get("time_ok", 0)) + 1
+                else:
+                    self._entry_diag["time_block"] = int(self._entry_diag.get("time_block", 0)) + 1
+            if not allowed:
+                self._log_skip(ts_ms=ts, regime=regime, hour_local=hour_local, reason=why, price=c, snap=snap)
+                return
+
+        # 8) HOURLY GATING
         if regime in ("TREND", "RANGE") and getattr(self, "HOURLY_GATING_ENABLED", False):
             allowed, hour_local, why = self._hourly_allows_entry(regime=regime, ts_ms=ts)
             if not allowed:
                 self._log_skip(ts_ms=ts, regime=regime, hour_local=hour_local, reason=why, price=c, snap=snap)
                 return
 
-        # 8) diagnostics counters
+        # 9) diagnostics counters
         if hasattr(self, "_entry_diag") and isinstance(self._entry_diag, dict):
             trend_ok_any = bool(trend_long_ok or trend_short_ok)
             vwap_ok_any = bool(vwap_long_ok or vwap_short_ok)
@@ -1677,7 +1885,7 @@ class HybridScalperPRO:
             if delta_ok_any:
                 self._entry_diag["delta_ok"] = int(self._entry_diag.get("delta_ok", 0)) + 1
 
-        # 9) entries
+        # 10) entries
         eff_min_long, eff_min_short = self._effective_min_scores()
 
         if regime == "TREND":

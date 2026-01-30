@@ -360,7 +360,15 @@ class HybridAdapterShadow:
             return False
 
     def _apply_params_to_hybrid(self, params: Dict[str, Any]) -> None:
+        applied = set()
+        if hasattr(self.hybrid, "apply_param_overrides"):
+            try:
+                applied.update(self.hybrid.apply_param_overrides(params or {}))
+            except Exception:
+                pass
         for k, v in (params or {}).items():
+            if k in applied:
+                continue
             try:
                 setattr(self.hybrid, k, v)
             except Exception:
