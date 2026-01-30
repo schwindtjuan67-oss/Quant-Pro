@@ -386,6 +386,13 @@ def _adapter_override_diagnostics(params: Dict[str, Any]) -> Tuple[List[str], Li
         "sl_atr_mult": ("ATR_STOP_MULT", "RANGE_STOP_ATR_MULT"),
         "tp_atr_mult": ("ATR_TRAIL_MULT", "RANGE_TP_TO_VWAP_ATR"),
         "cooldown_sec": ("cooldown_after_loss_sec", "cooldown_after_win_sec", "reentry_block_sec"),
+        "delta_rolling_sec": ("DELTA_ROLLING_SEC", "delta_rolling_sec"),
+        "delta_threshold": ("DELTA_THRESHOLD", "delta_threshold"),
+        "hour_start": ("HOUR_START", "hour_start"),
+        "hour_end": ("HOUR_END", "hour_end"),
+        "use_time_filter": ("USE_TIME_FILTER", "use_time_filter"),
+        "rr_min": ("RR_MIN", "rr_min"),
+        "max_trades_day": ("max_trades_day", "risk_max_trades", "MAX_TRADES_DAY"),
     }
     applied: List[str] = []
     skipped: List[str] = []
@@ -693,4 +700,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

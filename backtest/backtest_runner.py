@@ -278,6 +278,13 @@ class BacktestRunner:
                     "sl_atr_mult": ("ATR_STOP_MULT", "RANGE_STOP_ATR_MULT"),
                     "tp_atr_mult": ("ATR_TRAIL_MULT", "RANGE_TP_TO_VWAP_ATR"),
                     "cooldown_sec": ("cooldown_after_loss_sec", "cooldown_after_win_sec", "reentry_block_sec"),
+                    "delta_rolling_sec": ("DELTA_ROLLING_SEC", "delta_rolling_sec"),
+                    "delta_threshold": ("DELTA_THRESHOLD", "delta_threshold"),
+                    "hour_start": ("HOUR_START", "hour_start"),
+                    "hour_end": ("HOUR_END", "hour_end"),
+                    "use_time_filter": ("USE_TIME_FILTER", "use_time_filter"),
+                    "rr_min": ("RR_MIN", "rr_min"),
+                    "max_trades_day": ("max_trades_day", "risk_max_trades", "MAX_TRADES_DAY"),
                 }
                 for key, value in params.items():
                     if key in force_set:
@@ -310,7 +317,7 @@ class BacktestRunner:
                     "atr_len": ("ATR_N", "atr_n"),
                     "sl_atr_mult": ("ATR_STOP_MULT", "atr_stop_mult"),
                     "tp_atr_mult": ("ATR_TRAIL_MULT", "atr_trail_mult"),
-                    "max_trades_day": ("risk_max_trades",),
+                    "max_trades_day": ("max_trades_day", "risk_max_trades"),
                     "cooldown_sec": ("cooldown_after_loss_sec", "cooldown_after_win_sec", "reentry_block_sec"),
                     "delta_rolling_sec": ("delta_rolling_sec",),
                     "delta_threshold": ("delta_threshold",),
@@ -328,6 +335,16 @@ class BacktestRunner:
                             target = attr
                             break
                     if not target:
+                        if key == "max_trades_day":
+                            try:
+                                rm = getattr(strategy, "risk_manager", None)
+                                if rm is not None and hasattr(rm, "max_trades"):
+                                    val = int(getattr(rm, "max_trades"))
+                                    if val != expected[key]:
+                                        _bt_print(f"[PARAM-CHECK] {key}: expected={expected[key]} got={val} via risk_manager.max_trades")
+                                    continue
+                            except Exception:
+                                pass
                         _bt_print(f"[PARAM-CHECK] {key}: no target attr found")
                         continue
                     try:
