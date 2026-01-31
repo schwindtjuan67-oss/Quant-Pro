@@ -197,6 +197,47 @@ class HybridAdapterShadow:
         applied = set()
         skipped = []
         applied_keys = set()
+        verbose_diag = os.getenv("PIPELINE_VERBOSE_DIAGNOSTICS", "").strip() in (
+            "1",
+            "true",
+            "TRUE",
+            "yes",
+            "YES",
+            "on",
+            "ON",
+        )
+        freq_keys = (
+            "delta_rolling_sec",
+            "delta_threshold",
+            "hour_start",
+            "hour_end",
+            "use_time_filter",
+            "rr_min",
+        )
+        freq_attr_map = {
+            "delta_rolling_sec": ("delta_rolling_sec", "DELTA_ROLLING_SEC"),
+            "delta_threshold": ("delta_threshold", "DELTA_THRESHOLD"),
+            "hour_start": ("hour_start", "HOUR_START"),
+            "hour_end": ("hour_end", "HOUR_END"),
+            "use_time_filter": ("use_time_filter", "USE_TIME_FILTER"),
+            "rr_min": ("rr_min", "RR_MIN"),
+        }
+        before_snapshot = {}
+        if verbose_diag and isinstance(kwargs, dict):
+            for key in freq_keys:
+                if key not in kwargs:
+                    continue
+                target = None
+                value = None
+                for attr in freq_attr_map.get(key, ()):
+                    if hasattr(self.hybrid, attr):
+                        target = attr
+                        try:
+                            value = getattr(self.hybrid, attr)
+                        except Exception:
+                            value = None
+                        break
+                before_snapshot[key] = (target or "<missing>", value)
         if hasattr(self.hybrid, "apply_param_overrides"):
             try:
                 applied_keys.update(self.hybrid.apply_param_overrides(kwargs or {}))
@@ -252,12 +293,29 @@ class HybridAdapterShadow:
             if not applied_any:
                 skipped.append(k)
 
-        if os.getenv("PIPELINE_VERBOSE_DIAGNOSTICS", "").strip() in ("1", "true", "TRUE", "yes", "YES", "on", "ON"):
+        if verbose_diag:
             init_kwargs, _extras = self._split_init_kwargs(kwargs)
             print("[ADAPTER][DIAG] strategy_kwargs=", json.dumps(kwargs, ensure_ascii=False, sort_keys=True))
             print("[ADAPTER][DIAG] init_kwargs=", json.dumps(init_kwargs, ensure_ascii=False, sort_keys=True))
             print("[ADAPTER][DIAG] overrides_applied=", json.dumps(sorted(applied), ensure_ascii=False))
             print("[ADAPTER][DIAG] overrides_skipped=", json.dumps(sorted(set(skipped)), ensure_ascii=False))
+            if before_snapshot:
+                for key, (before_target, before_value) in before_snapshot.items():
+                    after_target = None
+                    after_value = None
+                    for attr in freq_attr_map.get(key, ()):
+                        if hasattr(self.hybrid, attr):
+                            after_target = attr
+                            try:
+                                after_value = getattr(self.hybrid, attr)
+                            except Exception:
+                                after_value = None
+                            break
+                    print(
+                        "[ADAPTER][DIAG] freq_param="
+                        f"{key} target={after_target or '<missing>'} "
+                        f"before={before_value} ({before_target}) after={after_value}"
+                    )
 
     def _log_param_apply(self, params: Dict[str, Any]) -> None:
         if os.getenv("PIPELINE_VERBOSE_DIAGNOSTICS", "").strip() not in (
