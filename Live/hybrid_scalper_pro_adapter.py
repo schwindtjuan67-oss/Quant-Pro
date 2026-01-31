@@ -213,6 +213,8 @@ class HybridAdapterShadow:
             "hour_end",
             "use_time_filter",
             "rr_min",
+            "cooldown_sec",
+            "max_trades_day",
         )
         freq_attr_map = {
             "delta_rolling_sec": ("delta_rolling_sec", "DELTA_ROLLING_SEC"),
@@ -221,23 +223,32 @@ class HybridAdapterShadow:
             "hour_end": ("hour_end", "HOUR_END"),
             "use_time_filter": ("use_time_filter", "USE_TIME_FILTER"),
             "rr_min": ("rr_min", "RR_MIN"),
+            "cooldown_sec": ("cooldown_sec", "COOLDOWN_SEC"),
+            "max_trades_day": ("max_trades_day", "MAX_TRADES_DAY"),
         }
         before_snapshot = {}
+
+        def _snapshot_strategy_attr(key: str):
+            for attr in freq_attr_map.get(key, ()):
+                if hasattr(self.hybrid, attr):
+                    try:
+                        return attr, getattr(self.hybrid, attr)
+                    except Exception:
+                        return attr, None
+            if key == "max_trades_day":
+                rm = getattr(self.hybrid, "risk_manager", None)
+                if rm is not None and hasattr(rm, "max_trades"):
+                    try:
+                        return "risk_manager.max_trades", getattr(rm, "max_trades")
+                    except Exception:
+                        return "risk_manager.max_trades", None
+            return "<missing>", None
+
         if verbose_diag and isinstance(kwargs, dict):
             for key in freq_keys:
                 if key not in kwargs:
                     continue
-                target = None
-                value = None
-                for attr in freq_attr_map.get(key, ()):
-                    if hasattr(self.hybrid, attr):
-                        target = attr
-                        try:
-                            value = getattr(self.hybrid, attr)
-                        except Exception:
-                            value = None
-                        break
-                before_snapshot[key] = (target or "<missing>", value)
+                before_snapshot[key] = _snapshot_strategy_attr(key)
         if hasattr(self.hybrid, "apply_param_overrides"):
             try:
                 applied_keys.update(self.hybrid.apply_param_overrides(kwargs or {}))
@@ -290,6 +301,22 @@ class HybridAdapterShadow:
                         break
                     except Exception:
                         pass
+            if k == "max_trades_day":
+                if hasattr(self.hybrid, "risk_max_trades"):
+                    try:
+                        setattr(self.hybrid, "risk_max_trades", v)
+                        applied.add(k)
+                        applied_any = True
+                    except Exception:
+                        pass
+                rm = getattr(self.hybrid, "risk_manager", None)
+                if rm is not None and hasattr(rm, "max_trades"):
+                    try:
+                        setattr(rm, "max_trades", int(v))
+                        applied.add(k)
+                        applied_any = True
+                    except Exception:
+                        pass
             if not applied_any:
                 skipped.append(k)
 
@@ -301,16 +328,7 @@ class HybridAdapterShadow:
             print("[ADAPTER][DIAG] overrides_skipped=", json.dumps(sorted(set(skipped)), ensure_ascii=False))
             if before_snapshot:
                 for key, (before_target, before_value) in before_snapshot.items():
-                    after_target = None
-                    after_value = None
-                    for attr in freq_attr_map.get(key, ()):
-                        if hasattr(self.hybrid, attr):
-                            after_target = attr
-                            try:
-                                after_value = getattr(self.hybrid, attr)
-                            except Exception:
-                                after_value = None
-                            break
+                    after_target, after_value = _snapshot_strategy_attr(key)
                     print(
                         "[ADAPTER][DIAG] freq_param="
                         f"{key} target={after_target or '<missing>'} "
@@ -474,5 +492,17 @@ class HybridAdapterShadow:
                     try:
                         setattr(self.hybrid, mapped, v)
                         break
+                    except Exception:
+                        pass
+            if k == "max_trades_day":
+                if hasattr(self.hybrid, "risk_max_trades"):
+                    try:
+                        setattr(self.hybrid, "risk_max_trades", v)
+                    except Exception:
+                        pass
+                rm = getattr(self.hybrid, "risk_manager", None)
+                if rm is not None and hasattr(rm, "max_trades"):
+                    try:
+                        setattr(rm, "max_trades", int(v))
                     except Exception:
                         pass
