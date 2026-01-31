@@ -1,44 +1,114 @@
-#!/usr/bin/env python3
-import inspect
+import argparse
 import json
 import os
 import sys
-from typing import Any, Dict, List
 
-from backtest.backtest_runner import _expand_strategy_kwargs
-from backtest.run_backtest import _merge_strategy_kwargs
 from Live.hybrid_scalper_pro import HybridScalperPRO
-from Live.logger_pro import TradeLogger
 from Live.order_manager_shadow import ShadowOrderManager
 from Live.risk_manager import RiskManager
+from Live.logger_pro import TradeLogger
 
 
-FREQUENCY_KEYS = [
+FREQ_KEYS = (
     "delta_rolling_sec",
     "delta_threshold",
     "hour_start",
     "hour_end",
     "use_time_filter",
     "rr_min",
-    "cooldown_sec",
-    "max_trades_day",
-]
+)
+FREQ_ATTR_MAP = {
+    "delta_rolling_sec": ("delta_rolling_sec", "DELTA_ROLLING_SEC"),
+    "delta_threshold": ("delta_threshold", "DELTA_THRESHOLD"),
+    "hour_start": ("hour_start", "HOUR_START"),
+    "hour_end": ("hour_end", "HOUR_END"),
+    "use_time_filter": ("use_time_filter", "USE_TIME_FILTER"),
+    "rr_min": ("rr_min", "RR_MIN"),
+}
 
 
-def _load_config(path: str) -> Dict[str, Any]:
+def _is_verbose() -> bool:
+    return os.getenv("PIPELINE_VERBOSE_DIAGNOSTICS", "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    )
+
+
+def _vprint(message: str) -> None:
+    if _is_verbose():
+        print(message)
+
+
+def _load_config(path: str) -> dict:
     with open(path, "r", encoding="utf-8") as handle:
         return json.load(handle)
 
 
-def _build_strategy(cfg: Dict[str, Any]) -> HybridScalperPRO:
-    kwargs = _merge_strategy_kwargs(cfg)
-    kwargs = _expand_strategy_kwargs(kwargs)
-    params = inspect.signature(HybridScalperPRO.__init__).parameters
-    accepted = {k for k in params if k != "self"}
-    init_kwargs = {k: v for k, v in (kwargs or {}).items() if k in accepted}
-    extra_kwargs = {k: v for k, v in (kwargs or {}).items() if k not in accepted}
+def _merge_strategy_kwargs(cfg: dict) -> dict:
+    merged = {}
+    if not isinstance(cfg, dict):
+        return merged
+    strategy = cfg.get("strategy")
+    if isinstance(strategy, dict) and isinstance(strategy.get("kwargs"), dict):
+        merged.update(strategy.get("kwargs") or {})
+    if isinstance(cfg.get("strategy_kwargs"), dict):
+        merged.update(cfg.get("strategy_kwargs") or {})
+    if isinstance(cfg.get("params"), dict):
+        merged.update(cfg.get("params") or {})
+    if isinstance(cfg.get("strategy_params"), dict):
+        merged.update(cfg.get("strategy_params") or {})
+    if isinstance(strategy, dict) and isinstance(strategy.get("params"), dict):
+        merged.update(strategy.get("params") or {})
+    return merged
 
-    symbol = str(cfg.get("symbol") or "TEST").upper()
+
+def _resolve_attr(obj: object, key: str) -> tuple:
+    for attr in FREQ_ATTR_MAP.get(key, (key, key.upper())):
+        if hasattr(obj, attr):
+            try:
+                return attr, getattr(obj, attr)
+            except Exception:
+                return attr, None
+    return "<missing>", None
+
+
+def _apply_params(strategy: HybridScalperPRO, params: dict) -> None:
+    if not isinstance(params, dict):
+        return
+    if hasattr(strategy, "apply_param_overrides"):
+        strategy.apply_param_overrides(params)
+        return
+    for key, value in params.items():
+        attr, _value = _resolve_attr(strategy, key)
+        if attr != "<missing>":
+            setattr(strategy, attr, value)
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Diagnose frequency params on HybridScalperPRO.")
+    parser.add_argument("config", nargs="?", help="Optional path to config JSON.")
+    args = parser.parse_args()
+
+    if not _is_verbose():
+        return 0
+
+    cfg = {}
+    if args.config:
+        cfg = _load_config(args.config)
+
+    _vprint("[DIAG] HybridScalperPRO attribute presence")
+    for key in FREQ_KEYS:
+        _vprint(
+            f"[DIAG] {key}: has_lower={hasattr(HybridScalperPRO, key)} "
+            f"has_upper={hasattr(HybridScalperPRO, key.upper())}"
+        )
+
+    merged_kwargs = _merge_strategy_kwargs(cfg)
+    _vprint("[DIAG] merged_kwargs=" + json.dumps(merged_kwargs, ensure_ascii=False, sort_keys=True))
+
+    symbol = str(cfg.get("symbol") or "DIAG")
     logger = TradeLogger(symbol)
     router = ShadowOrderManager(symbol, cfg)
     risk_manager = RiskManager(
@@ -54,71 +124,18 @@ def _build_strategy(cfg: Dict[str, Any]) -> HybridScalperPRO:
         risk_manager=risk_manager,
         event_bus=None,
         logger=logger,
-        **init_kwargs,
     )
-    for key, value in extra_kwargs.items():
-        setattr(strategy, key, value)
-    if hasattr(strategy, "apply_param_overrides"):
-        strategy.apply_param_overrides(kwargs)
-    return strategy
 
+    if merged_kwargs:
+        _apply_params(strategy, merged_kwargs)
 
-def _match_attrs(strategy: HybridScalperPRO, key: str) -> List[str]:
-    key_lower = key.lower()
-    key_compact = key_lower.replace("_", "")
-    matches = []
-    for attr in dir(strategy):
-        attr_lower = attr.lower()
-        if key_lower in attr_lower or key_compact in attr_lower:
-            matches.append(attr)
-    return sorted(matches)
+    _vprint("[DIAG] instance values")
+    for key in FREQ_KEYS:
+        attr, value = _resolve_attr(strategy, key)
+        _vprint(f"[DIAG] {key}: {attr}={value}")
 
-
-def _resolve_value(strategy: HybridScalperPRO, key: str) -> Dict[str, Any]:
-    candidates = [
-        key,
-        key.upper(),
-    ]
-    if key == "cooldown_sec":
-        candidates.extend(
-            [
-                "cooldown_after_loss_sec",
-                "cooldown_after_win_sec",
-                "reentry_block_sec",
-                "COOLDOWN_SEC",
-            ]
-        )
-    if key == "max_trades_day":
-        candidates.extend(["risk_max_trades", "MAX_TRADES_DAY"])
-    for attr in candidates:
-        if hasattr(strategy, attr):
-            return {"attr": attr, "value": getattr(strategy, attr)}
-    if key == "max_trades_day":
-        rm = getattr(strategy, "risk_manager", None)
-        if rm is not None and hasattr(rm, "max_trades"):
-            return {"attr": "risk_manager.max_trades", "value": getattr(rm, "max_trades")}
-    return {"attr": "<missing>", "value": None}
-
-
-def main() -> int:
-    if os.getenv("PIPELINE_VERBOSE_DIAGNOSTICS", "").strip().lower() not in ("1", "true", "yes", "on"):
-        print("[DIAG] PIPELINE_VERBOSE_DIAGNOSTICS is not enabled; exiting.")
-        return 0
-    if len(sys.argv) < 2:
-        print("Usage: python tools/diagnose_frequency_params.py <config.json>")
-        return 1
-
-    cfg = _load_config(sys.argv[1])
-    strategy = _build_strategy(cfg)
-
-    print("[DIAG] Frequency attribute matches and resolved values:")
-    for key in FREQUENCY_KEYS:
-        matches = _match_attrs(strategy, key)
-        resolved = _resolve_value(strategy, key)
-        print(f"- {key}: matches={matches}")
-        print(f"  -> {resolved['attr']} = {resolved['value']}")
     return 0
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    sys.exit(main())

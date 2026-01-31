@@ -256,60 +256,111 @@ class BacktestRunner:
             def _apply_param_overrides(self, strategy: Any, params: Dict[str, Any]) -> None:
                 if not isinstance(params, dict):
                     return
-                if hasattr(strategy, "apply_param_overrides"):
-                    try:
-                        strategy.apply_param_overrides(params)
-                        return
-                    except Exception:
-                        pass
-                force_set = {
+                freq_keys = (
                     "delta_rolling_sec",
                     "delta_threshold",
                     "hour_start",
                     "hour_end",
-                    "rr_min",
                     "use_time_filter",
-                    "max_trades_day",
-                    "max_trades_per_day",
-                    "cooldown_sec",
-                    "delta_roll_sec",
+                    "rr_min",
+                )
+                freq_attr_map = {
+                    "delta_rolling_sec": ("delta_rolling_sec", "DELTA_ROLLING_SEC"),
+                    "delta_threshold": ("delta_threshold", "DELTA_THRESHOLD"),
+                    "hour_start": ("hour_start", "HOUR_START"),
+                    "hour_end": ("hour_end", "HOUR_END"),
+                    "use_time_filter": ("use_time_filter", "USE_TIME_FILTER"),
+                    "rr_min": ("rr_min", "RR_MIN"),
                 }
-                # Map snake_case params into uppercase attrs when the Hybrid expects constants.
-                # This keeps backward compatibility when __init__ doesn't expose them.
-                mapping = {
-                    "ema_fast": ("EMA_FAST",),
-                    "ema_slow": ("EMA_SLOW",),
-                    "atr_len": ("ATR_LEN", "ATR_N"),
-                    "sl_atr_mult": ("ATR_STOP_MULT", "RANGE_STOP_ATR_MULT"),
-                    "tp_atr_mult": ("ATR_TRAIL_MULT", "RANGE_TP_TO_VWAP_ATR"),
-                    "cooldown_sec": ("COOLDOWN_SEC", "cooldown_after_loss_sec", "cooldown_after_win_sec", "reentry_block_sec"),
-                    "delta_roll_sec": ("DELTA_ROLLING_SEC", "delta_rolling_sec"),
-                    "delta_rolling_sec": ("DELTA_ROLLING_SEC", "delta_rolling_sec"),
-                    "delta_threshold": ("DELTA_THRESHOLD", "delta_threshold"),
-                    "hour_start": ("HOUR_START", "hour_start"),
-                    "hour_end": ("HOUR_END", "hour_end"),
-                    "use_time_filter": ("USE_TIME_FILTER", "use_time_filter"),
-                    "rr_min": ("RR_MIN", "rr_min"),
-                    "max_trades_day": ("max_trades_day", "risk_max_trades", "MAX_TRADES_DAY"),
-                    "max_trades_per_day": ("max_trades_day", "risk_max_trades", "MAX_TRADES_DAY"),
-                }
-                for key, value in params.items():
-                    if key in force_set:
-                        try:
-                            setattr(strategy, key, value)
-                        except Exception:
-                            pass
-                    if hasattr(strategy, key):
-                        try:
-                            setattr(strategy, key, value)
-                        except Exception:
-                            pass
-                    for mapped in mapping.get(key, ()):
-                        if hasattr(strategy, mapped):
+                before_snapshot = {}
+                if PIPELINE_VERBOSE_DIAGNOSTICS:
+                    for key in freq_keys:
+                        if key not in params:
+                            continue
+                        target = None
+                        value = None
+                        for attr in freq_attr_map.get(key, ()):
+                            if hasattr(strategy, attr):
+                                target = attr
+                                try:
+                                    value = getattr(strategy, attr)
+                                except Exception:
+                                    value = None
+                                break
+                        before_snapshot[key] = (target or "<missing>", value)
+                applied_via_method = False
+                if hasattr(strategy, "apply_param_overrides"):
+                    try:
+                        strategy.apply_param_overrides(params)
+                        applied_via_method = True
+                    except Exception:
+                        pass
+                if not applied_via_method:
+                    force_set = {
+                        "delta_rolling_sec",
+                        "delta_threshold",
+                        "hour_start",
+                        "hour_end",
+                        "rr_min",
+                        "use_time_filter",
+                        "max_trades_day",
+                        "max_trades_per_day",
+                        "cooldown_sec",
+                        "delta_roll_sec",
+                    }
+                    # Map snake_case params into uppercase attrs when the Hybrid expects constants.
+                    # This keeps backward compatibility when __init__ doesn't expose them.
+                    mapping = {
+                        "ema_fast": ("EMA_FAST",),
+                        "ema_slow": ("EMA_SLOW",),
+                        "atr_len": ("ATR_LEN", "ATR_N"),
+                        "sl_atr_mult": ("ATR_STOP_MULT", "RANGE_STOP_ATR_MULT"),
+                        "tp_atr_mult": ("ATR_TRAIL_MULT", "RANGE_TP_TO_VWAP_ATR"),
+                        "cooldown_sec": ("COOLDOWN_SEC", "cooldown_after_loss_sec", "cooldown_after_win_sec", "reentry_block_sec"),
+                        "delta_roll_sec": ("DELTA_ROLLING_SEC", "delta_rolling_sec"),
+                        "delta_rolling_sec": ("DELTA_ROLLING_SEC", "delta_rolling_sec"),
+                        "delta_threshold": ("DELTA_THRESHOLD", "delta_threshold"),
+                        "hour_start": ("HOUR_START", "hour_start"),
+                        "hour_end": ("HOUR_END", "hour_end"),
+                        "use_time_filter": ("USE_TIME_FILTER", "use_time_filter"),
+                        "rr_min": ("RR_MIN", "rr_min"),
+                        "max_trades_day": ("max_trades_day", "risk_max_trades", "MAX_TRADES_DAY"),
+                        "max_trades_per_day": ("max_trades_day", "risk_max_trades", "MAX_TRADES_DAY"),
+                    }
+                    for key, value in params.items():
+                        if key in force_set:
                             try:
-                                setattr(strategy, mapped, value)
+                                setattr(strategy, key, value)
                             except Exception:
                                 pass
+                        if hasattr(strategy, key):
+                            try:
+                                setattr(strategy, key, value)
+                            except Exception:
+                                pass
+                        for mapped in mapping.get(key, ()):
+                            if hasattr(strategy, mapped):
+                                try:
+                                    setattr(strategy, mapped, value)
+                                except Exception:
+                                    pass
+                if PIPELINE_VERBOSE_DIAGNOSTICS and before_snapshot:
+                    for key, (before_target, before_value) in before_snapshot.items():
+                        after_target = None
+                        after_value = None
+                        for attr in freq_attr_map.get(key, ()):
+                            if hasattr(strategy, attr):
+                                after_target = attr
+                                try:
+                                    after_value = getattr(strategy, attr)
+                                except Exception:
+                                    after_value = None
+                                break
+                        _bt_print(
+                            "[BACKTEST][DIAG] freq_param="
+                            f"{key} target={after_target or '<missing>'} "
+                            f"before={before_value} ({before_target}) after={after_value}"
+                        )
 
             def _log_param_apply(self, strategy: Any, params: Dict[str, Any]) -> None:
                 if not PIPELINE_VERBOSE_DIAGNOSTICS or self._param_apply_logged:
